@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ public class JbootSwaggerController extends JbootController {
         }
 
         String basePath = getRequest().getRequestURL().toString();
-        String jsonUrl = basePath + "json";
+        String jsonUrl = basePath.endsWith("/") ? basePath + "json" : basePath + "/json";
 
         html = html.replace("http://petstore.swagger.io/v2/swagger.json", jsonUrl);
         // 可能是 https ，看下载的 swagger 版本

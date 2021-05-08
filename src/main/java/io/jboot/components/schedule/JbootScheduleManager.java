@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,12 +79,9 @@ public class JbootScheduleManager {
 
     private void initSchedules() {
         List<Class<Runnable>> runnableClass = ClassScanner.scanSubClass(Runnable.class, true);
-        if (runnableClass != null) {
-            for (Class<Runnable> rc : runnableClass) {
-                addSchedule(rc);
-            }
-        }
+        runnableClass.forEach(this::addSchedule);
     }
+
 
     public void addSchedule(Class<? extends Runnable> runnableClass) {
         FixedDelay fixedDelayJob = runnableClass.getAnnotation(FixedDelay.class);
@@ -112,8 +109,8 @@ public class JbootScheduleManager {
             try {
                 scheduleRunnableCache.put(runnableClass, executeRunnable);
                 // modified by lixin 08.08, 用于remove fixedScheduler
-                ScheduledFuture sf = fixedScheduler.scheduleAtFixedRate(executeRunnable, fixedRateJob.initialDelay(), fixedRateJob.period(), TimeUnit.SECONDS);
-                scheduleFutureCache.put(runnableClass, sf);
+                ScheduledFuture future = fixedScheduler.scheduleAtFixedRate(executeRunnable, fixedRateJob.initialDelay(), fixedRateJob.period(), TimeUnit.SECONDS);
+                scheduleFutureCache.put(runnableClass, future);
             } catch (Exception e) {
                 LOG.error(e.toString(), e);
             }
@@ -160,5 +157,11 @@ public class JbootScheduleManager {
         return fixedScheduler;
     }
 
+    public JbooScheduleConfig getConfig() {
+        return config;
+    }
 
+    public Map<Class, ScheduledFuture> getScheduleFutureCache() {
+        return scheduleFutureCache;
+    }
 }

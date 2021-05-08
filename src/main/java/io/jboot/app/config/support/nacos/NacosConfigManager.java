@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ package io.jboot.app.config.support.nacos;
 
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
+import io.jboot.app.config.ConfigUtil;
 import io.jboot.app.config.JbootConfigManager;
-import io.jboot.utils.StrUtil;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -56,7 +56,7 @@ public class NacosConfigManager {
             String content = configService.getConfig(nacosServerConfig.getDataId()
                     , nacosServerConfig.getGroup(), 3000);
 
-            if (StrUtil.isNotBlank(content)) {
+            if (ConfigUtil.isNotBlank(content)) {
                 contentProperties = str2Properties(content);
                 if (contentProperties != null) {
                     configManager.setRemoteProperties(contentProperties);
@@ -80,7 +80,6 @@ public class NacosConfigManager {
         Properties properties = str2Properties(configInfo);
         if (contentProperties == null) {
             contentProperties = properties;
-
             configManager.setRemoteProperties(properties);
         } else {
             for (Object key : properties.keySet()) {

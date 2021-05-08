@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,12 @@ public class JbootExceptionHolder {
         throwables.get().add(ex);
     }
     public static void hold(String message,Throwable ex) {
-        messages.get().add(message);
-        throwables.get().add(ex);
+        if (message != null) {
+            messages.get().add(message);
+        }
+        if (ex != null) {
+            throwables.get().add(ex);
+        }
     }
 
     public static List<Throwable> getThrowables() {

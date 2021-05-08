@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,9 @@ import io.jboot.support.redis.JbootRedis;
 import io.jboot.support.redis.JbootRedisManager;
 import io.jboot.components.cache.JbootCacheBase;
 import io.jboot.exception.JbootIllegalConfigException;
+import io.jboot.support.redis.RedisScanResult;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 
 public class JbootRedisCacheImpl extends JbootCacheBase {
@@ -87,11 +86,24 @@ public class JbootRedisCacheImpl extends JbootCacheBase {
 
     @Override
     public void removeAll(String cacheName) {
-        String[] keys = new String[]{};
-        keys = redis.keys(cacheName + ":*").toArray(keys);
-        if (keys != null && keys.length > 0) {
-            redis.del(keys);
-        }
+        String cursor = "0";
+        int scanCount = 1000;
+        boolean continueState = true;
+        do {
+            RedisScanResult<String> redisScanResult = redis.scan(cacheName + ":*", cursor, scanCount);
+            List<String> scanKeys = redisScanResult.getResults();
+            cursor = redisScanResult.getCursor();
+
+            if (scanKeys != null && scanKeys.size() > 0) {
+                redis.del(scanKeys.toArray(new String[scanKeys.size()]));
+            }
+
+            if (redisScanResult.isCompleteIteration()) {
+                continueState = false;
+            }
+        } while (continueState);
+
+        redis.srem(redisCacheNamesKey, cacheName);
     }
 
 
@@ -107,17 +119,18 @@ public class JbootRedisCacheImpl extends JbootCacheBase {
 
 
     private String buildKey(String cacheName, Object key) {
-        if (key instanceof Number) {
-            return String.format("%s:I:%s", cacheName, key);
+        StringBuilder keyBuilder = new StringBuilder(cacheName).append(":");
+        if (key instanceof String) {
+            keyBuilder.append("S");
+        } else if (key instanceof Number) {
+            keyBuilder.append("I");
+        } else if (key == null) {
+            keyBuilder.append("S");
+            key = "null";
         } else {
-            Class keyClass = key.getClass();
-            if (String.class.equals(keyClass) ||
-                    StringBuffer.class.equals(keyClass) ||
-                    StringBuilder.class.equals(keyClass)) {
-                return String.format("%s:S:%s", cacheName, key);
-            }
+            keyBuilder.append("O");
         }
-        return String.format("%s:O:%s", cacheName, key);
+        return keyBuilder.append(":").append(key).toString();
     }
 
     @Override
@@ -157,14 +170,26 @@ public class JbootRedisCacheImpl extends JbootCacheBase {
 
     @Override
     public List getKeys(String cacheName) {
-        Set<String> keyset = redis.keys(cacheName + ":*");
-        if (keyset == null || keyset.size() == 0) {
-            return null;
-        }
-        List<String> keys = new ArrayList<>(keyset);
-        for (int i = 0; i < keys.size(); i++) {
-            keys.set(i, keys.get(i).substring(cacheName.length() + 3));
-        }
+        List<String> keys = new ArrayList<>();
+        String cursor = "0";
+        int scanCount = 1000;
+        boolean continueState = true;
+        do {
+            RedisScanResult<String> redisScanResult = redis.scan(cacheName + ":*", cursor, scanCount);
+            List<String> scanKeys = redisScanResult.getResults();
+            cursor = redisScanResult.getCursor();
+
+            if (scanKeys != null && scanKeys.size() > 0) {
+                for (String key : scanKeys) {
+                    keys.add(key.substring(cacheName.length() + 3));
+                }
+            }
+
+            if (redisScanResult.isCompleteIteration()) {
+                continueState = false;
+            }
+        } while (continueState);
+
         return keys;
     }
 

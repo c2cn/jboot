@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package io.jboot.components.http.jboot;
 
-import com.jfinal.log.Log;
 import io.jboot.components.http.JbootHttp;
 import io.jboot.components.http.JbootHttpRequest;
 import io.jboot.components.http.JbootHttpResponse;
@@ -36,8 +35,6 @@ import java.util.zip.GZIPInputStream;
 
 
 public class JbootHttpImpl implements JbootHttp {
-
-    private static final Log LOG = Log.getLog(JbootHttpImpl.class);
 
 
     @Override
@@ -100,10 +97,12 @@ public class JbootHttpImpl implements JbootHttp {
             response.setResponseCode(connection.getResponseCode());
             response.setHeaders(connection.getHeaderFields());
 
-            response.copyStream(inStream);
+            //是否要读取 body 数据
+            if (request.isReadBody()) {
+                response.copyStream(inStream);
+            }
 
         } catch (Throwable ex) {
-            LOG.warn(ex.toString(), ex);
             response.setError(ex);
         } finally {
 
@@ -193,9 +192,6 @@ public class JbootHttpImpl implements JbootHttp {
         connection.setConnectTimeout(request.getConnectTimeOut());
         connection.setRequestMethod(request.getMethod());
 
-
-        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.146 Safari/537.36");
         if (request.getHeaders() != null && request.getHeaders().size() > 0) {
             for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
                 connection.setRequestProperty(entry.getKey(), entry.getValue());
@@ -223,7 +219,7 @@ public class JbootHttpImpl implements JbootHttp {
         if (request.getCertPath() != null && request.getCertPass() != null) {
 
             KeyStore clientStore = KeyStore.getInstance("PKCS12");
-            clientStore.load(new FileInputStream(request.getCertPath()), request.getCertPass().toCharArray());
+            clientStore.load(request.getCertInputStream(), request.getCertPass().toCharArray());
 
             KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             keyManagerFactory.init(clientStore, request.getCertPass().toCharArray());
@@ -233,7 +229,7 @@ public class JbootHttpImpl implements JbootHttp {
             TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             trustManagerFactory.init(clientStore);
 
-            SSLContext sslContext = SSLContext.getInstance("TLSv1");
+            SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(keyManagers, trustManagerFactory.getTrustManagers(), new SecureRandom());
 
             conn.setSSLSocketFactory(sslContext.getSocketFactory());

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ public class DataSourceBuilder {
             default:
                 DataSourceFactory dataSourceFactory = JbootSpiLoader.load(DataSourceFactory.class, factory);
                 if (dataSourceFactory == null) {
-                    throw new NullPointerException("can not load DataSourceFactory spi for name : " + factory);
+                    throw new NullPointerException("Can not load DataSourceFactory spi for name: " + factory);
                 }
                 return dataSourceFactory.createDataSource(dsc);
         }

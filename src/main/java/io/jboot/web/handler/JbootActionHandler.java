@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@ import com.jfinal.core.*;
 import com.jfinal.log.Log;
 import com.jfinal.render.Render;
 import com.jfinal.render.RenderException;
+import io.jboot.components.valid.ValidUtil;
 import io.jboot.utils.ClassUtil;
 import io.jboot.web.controller.JbootControllerContext;
-import io.jboot.web.fixedinterceptor.FixedInvocation;
+import io.jboot.web.render.JbootErrorRender;
 import io.jboot.web.render.JbootRenderFactory;
+import io.jboot.components.valid.ValidException;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -70,11 +72,7 @@ public class JbootActionHandler extends ActionHandler {
      * @return
      */
     public Invocation getInvocation(Action action, Controller controller) {
-        return devMode ? new JbootInvocationWarpper(action, controller) : new Invocation(action, controller);
-    }
-
-
-    public void setResponse(HttpServletResponse response, Action action) {
+        return new JbootActionInvocation(action, controller);
     }
 
 
@@ -86,7 +84,7 @@ public class JbootActionHandler extends ActionHandler {
      */
     @Override
     public void handle(String target, HttpServletRequest request, HttpServletResponse response, boolean[] isHandled) {
-        if (target.indexOf('.') != -1) {
+        if (target.lastIndexOf('.') != -1) {
             return;
         }
 
@@ -107,56 +105,24 @@ public class JbootActionHandler extends ActionHandler {
         Controller controller = null;
         try {
             controller = controllerFactory.getController(action.getControllerClass());
-            JbootControllerContext.hold(controller);
-//            controller.init(request, response, urlPara[0]);
+            //controller.init(request, response, urlPara[0]);
             CPI._init_(controller, action, request, response, urlPara[0]);
 
-//            Invocation invocation = new Invocation(action, controller);
+            JbootControllerContext.hold(controller);
+
+            //Invocation invocation = new Invocation(action, controller);
             Invocation invocation = getInvocation(action, controller);
-            if (devMode) {
-//                if (ActionReporter.isReportAfterInvocation(request)) {
-//                    invokeInvocation(invocation);
-//                    JbootActionReporter.report(target, controller, action);
-//                } else {
-//                    JbootActionReporter.report(target, controller, action);
-//                    invokeInvocation(invocation);
-//                }
+
+            if (JbootActionReporter.isReportEnable()) {
                 long time = System.currentTimeMillis();
                 try {
-                    invokeInvocation(invocation);
+                    doStartRender(target, request, response, isHandled, action, controller, invocation);
                 } finally {
-                    JbootActionReporter.report(target, controller, action, time);
+                    JbootActionReporter.report(target, controller, action, invocation, time);
                 }
             } else {
-                invokeInvocation(invocation);
+                doStartRender(target, request, response, isHandled, action, controller, invocation);
             }
-
-            Render render = controller.getRender();
-            if (render instanceof ForwardActionRender) {
-                String actionUrl = ((ForwardActionRender) render).getActionUrl();
-                if (target.equals(actionUrl)) {
-                    throw new RuntimeException("The forward action url is the same as before.");
-                } else {
-                    handle(actionUrl, request, response, isHandled);
-                }
-                return;
-            }
-
-            if (render == null
-                    && void.class != action.getMethod().getReturnType()
-                    && renderManager.getRenderFactory() instanceof JbootRenderFactory) {
-                JbootRenderFactory jrf = (JbootRenderFactory) renderManager.getRenderFactory();
-                render = jrf.getReturnValueRender(action, invocation.getReturnValue());
-            }
-
-            if (render == null) {
-                render = renderManager.getRenderFactory().getDefaultRender(action.getViewPath() + action.getMethodName());
-            }
-
-            //设置 response 的一些信息，比如 headers 等
-            setResponse(response, action);
-
-            render.setContext(request, response, action.getViewPath()).render();
 
         } catch (RenderException e) {
             if (LOG.isErrorEnabled()) {
@@ -165,6 +131,17 @@ public class JbootActionHandler extends ActionHandler {
             }
         } catch (ActionException e) {
             handleActionException(target, request, response, action, e);
+        } catch (ValidException e) {
+            if (LOG.isErrorEnabled()) {
+                String qs = request.getQueryString();
+                String targetInfo = qs == null ? target : target + "?" + qs;
+                LOG.error(e.getReason() + " : " + targetInfo, e);
+            }
+            Render render = renderManager.getRenderFactory().getErrorRender(ValidUtil.getErrorCode());
+            if (render instanceof JbootErrorRender) {
+                ((JbootErrorRender) render).setThrowable(e);
+            }
+            render.setContext(request, response, action.getViewPath()).render();
         } catch (Exception e) {
             if (LOG.isErrorEnabled()) {
                 String qs = request.getQueryString();
@@ -176,6 +153,32 @@ public class JbootActionHandler extends ActionHandler {
         } finally {
             JbootControllerContext.release();
             controllerFactory.recycle(controller);
+        }
+    }
+
+    private void doStartRender(String target, HttpServletRequest request, HttpServletResponse response, boolean[] isHandled, Action action, Controller controller, Invocation invocation) {
+
+        invocation.invoke();
+
+        Render render = controller.getRender();
+        if (render instanceof ForwardActionRender) {
+            String actionUrl = ((ForwardActionRender) render).getActionUrl();
+            if (target.equals(actionUrl)) {
+                throw new RuntimeException("The forward action url is the same as before.");
+            } else {
+                handle(actionUrl, request, response, isHandled);
+            }
+        } else {
+            if (render == null && void.class != action.getMethod().getReturnType() && renderManager.getRenderFactory() instanceof JbootRenderFactory) {
+                JbootRenderFactory jbootRenderFactory = (JbootRenderFactory) renderManager.getRenderFactory();
+                render = jbootRenderFactory.getReturnValueRender(action, invocation.getReturnValue());
+            }
+
+            if (render == null) {
+                render = renderManager.getRenderFactory().getDefaultRender(action.getViewPath() + action.getMethodName());
+            }
+
+            render.setContext(request, response, action.getViewPath()).render();
         }
     }
 
@@ -193,14 +196,20 @@ public class JbootActionHandler extends ActionHandler {
             msg = "403 Forbidden: ";
         }
 
+
         if (msg != null) {
-            if (LOG.isWarnEnabled()) {
-                String qs = request.getQueryString();
-                msg = msg + (qs == null ? target : target + "?" + qs);
-                if (e.getMessage() != null) {
-                    msg = msg + "\n" + e.getMessage();
+            if (errorCode == 404 || errorCode == 401 || errorCode == 403) {
+                if (LOG.isWarnEnabled()) {
+                    String qs = request.getQueryString();
+                    msg = msg + (qs == null ? target : target + "?" + qs);
+                    LOG.warn(msg, e);
                 }
-                LOG.warn(msg);
+            } else {
+                if (LOG.isErrorEnabled()) {
+                    String qs = request.getQueryString();
+                    msg = msg + (qs == null ? target : target + "?" + qs);
+                    LOG.error(msg, e);
+                }
             }
         } else {
             if (LOG.isErrorEnabled()) {
@@ -212,9 +221,5 @@ public class JbootActionHandler extends ActionHandler {
         e.getErrorRender().setContext(request, response, action.getViewPath()).render();
     }
 
-
-    private void invokeInvocation(Invocation inv) {
-        new FixedInvocation(inv).invoke();
-    }
 
 }

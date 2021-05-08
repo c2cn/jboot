@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>enum</title>
+</head>
+<body>
+
+test enum.html... </br>
+
+1 isMaster -----> #(JfinalEnum.isMaster(1)) </br>
+2 isMaster-----> #(JfinalEnum.isMaster(2))</br>
+
+1 isClient -----> #(JfinalEnum.isClient(1)) </br>
+20 isClient-----> #(JfinalEnum.isClient(20))</br>
+
+
+
+1 isDev(1) -----> #(JfinalEnum.isDev(1)) </br>
+1 isDev(1,"1") -----> #(JfinalEnum.isDev(1,"1")) </br>
+1 str() -----> #(JfinalEnum.str()) </br>
+
+
+
+</br></br></br>
+#for(v : JfinalEnum.values())
+ text-----> #(v.text)</br>
+#end
+
+
+
+
+</body>
+</html>

@@ -34,8 +34,8 @@ https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D
 
 下载 Sentinel 的 jar 到本地，并通过如下方式启动 启动 sentinel dashboard
 
-```
-java -jar sentinel-dashboard-1.7.1.jar
+```shell
+java -jar sentinel-dashboard-1.8.0.jar
 ```
 
  jar 的下载地址：https://github.com/alibaba/Sentinel/releases
@@ -44,8 +44,8 @@ java -jar sentinel-dashboard-1.7.1.jar
 
 例如：
 
-```
-java -Dserver.port=8888 -jar sentinel-dashboard-1.7.1.jar
+```shell
+java -Dserver.port=8888 -jar sentinel-dashboard-1.8.0.jar
 ```
 
 从 Sentinel 1.6.0 起，Sentinel 控制台引入基本的登录功能，默认用户名和密码都是 sentinel。
@@ -57,21 +57,39 @@ java -Dserver.port=8888 -jar sentinel-dashboard-1.7.1.jar
 关于控制台的更多配置，请参考：
 https://github.com/alibaba/Sentinel/wiki/%E6%8E%A7%E5%88%B6%E5%8F%B0#%E6%8E%A7%E5%88%B6%E5%8F%B0%E9%85%8D%E7%BD%AE%E9%A1%B9
 
-**第二步：配置项目的 sentinel.properties 和 Maven 依赖**
-  
-  在项目的 resource 目录下创建 sentinel.properties 文本，并配置相关信息如下：
+**第二步：配置项目的 jboot.properties 、 sentinel.properties 和 Maven 依赖**
 
-  ```
+在 jboot.properties 添加如下配置
+
+```properties
+jboot.sentinel.enable = true;
+
+// 是否对 http 请求启用限流，默认值为 true，启用后还需要去 sentinel 后台配置
+boot.sentinel.ereqeustEnable = true;
+
+// 如果 http 被限流后跳转的页面
+jboot.sentinel.e requestBlockPage;
+
+ // 如果 http 被限流后渲染的 json 数据，requestBlockPage 配置优先于此项
+jboot.sentinel.erequestBlockJsonMap;
+```
+  
+在项目的 resource 目录下创建 sentinel.properties 文本，并配置相关信息如下：
+
+```
 csp.sentinel.dashboard.server=localhost:8080
-  ```
+```
+这个配置指的是 sentinel 配置服务器的地址
+
 关于更多 sentinel.properties 的配置请参考：
 
 https://github.com/alibaba/Sentinel/wiki/%E5%90%AF%E5%8A%A8%E9%85%8D%E7%BD%AE%E9%A1%B9#%E5%9F%BA%E7%A1%80%E9%85%8D%E7%BD%AE%E9%A1%B9
 
 
-  添加 maven 依赖：
+添加 maven 依赖：
 
-  ```xml
+
+```xml
 <dependency>
     <groupId>com.alibaba.csp</groupId>
     <artifactId>sentinel-core</artifactId>
@@ -92,7 +110,26 @@ https://github.com/alibaba/Sentinel/wiki/%E5%90%AF%E5%8A%A8%E9%85%8D%E7%BD%AE%E9
     <version>${sentinel.version}</version>
     <scope>provided</scope>
 </dependency>
-  ```
+```
+
+如果使用 阿里云 AHAS 替代 sentinel dashboard，需要添加如下依赖（以上依赖不再需要）：
+
+
+```xml
+<dependency>
+    <groupId>com.alibaba.csp</groupId>
+    <artifactId>ahas-sentinel-client</artifactId>
+    <version>1.8.0</version>
+</dependency>
+```
+
+阿里云 AHAS 截图：
+
+![](./static/images/ahas.png)
+
+更多关于 阿里云 AHAS 的文档请参考：https://github.com/alibaba/Sentinel/wiki/AHAS-Sentinel-%E6%8E%A7%E5%88%B6%E5%8F%B0
+
+
 
 **第三步：配置限流资源**
 

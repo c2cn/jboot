@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package io.jboot.objects.counter.impl;
 
 import io.jboot.objects.counter.JbootCounter;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -25,19 +27,31 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class JbootLocalCounter implements JbootCounter {
 
-    AtomicLong atomicLong = new AtomicLong();
+    private static Map<String, AtomicLong> atomicLongs = new HashMap<>();
 
-    public JbootLocalCounter() {
+    private AtomicLong atomicLong;
+
+    public JbootLocalCounter(String name) {
+        atomicLong = atomicLongs.get(name);
+        if (atomicLong == null) {
+            synchronized (JbootLocalCounter.class) {
+                atomicLong = atomicLongs.get(name);
+                if (atomicLong == null) {
+                    atomicLong = new AtomicLong();
+                    atomicLongs.put(name, atomicLong);
+                }
+            }
+        }
     }
 
     @Override
-    public void increment() {
-        atomicLong.incrementAndGet();
+    public Long increment() {
+        return atomicLong.incrementAndGet();
     }
 
     @Override
-    public void decrement() {
-        atomicLong.decrementAndGet();
+    public Long decrement() {
+        return atomicLong.decrementAndGet();
     }
 
     @Override

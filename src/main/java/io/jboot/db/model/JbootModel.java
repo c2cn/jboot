@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,13 @@ import io.jboot.db.SqlDebugger;
 import io.jboot.db.dialect.JbootDialect;
 import io.jboot.exception.JbootException;
 import io.jboot.exception.JbootIllegalConfigException;
+import io.jboot.utils.ClassUtil;
 import io.jboot.utils.StrUtil;
 
 import java.lang.reflect.Array;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
 
@@ -34,7 +36,6 @@ import java.util.*;
 /**
  * @author michael yang
  */
-@SuppressWarnings("serial")
 public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
     private static final Log LOG = Log.getLog(JbootModel.class);
@@ -47,6 +48,9 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
     protected List<Join> joins = null;
     String datasourceName = null;
+    String alias = null;
+    String loadColumns = null;
+    boolean isCopyModel = false;
 
     public Joiner<M> leftJoin(String table) {
         return joining(Join.TYPE_LEFT, table, true);
@@ -80,15 +84,57 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
         return joining(Join.TYPE_FULL, table, condition);
     }
 
+    /**
+     * set table alias in sql
+     *
+     * @param alias
+     * @return
+     */
+    public M alias(String alias) {
+        if (StrUtil.isBlank(alias)) {
+            throw new IllegalArgumentException("alias must not be null or empty.");
+        }
+        M model = getOrCopyModel();
+        model.alias = alias;
+        return model;
+    }
+
 
     protected Joiner<M> joining(String type, String table, boolean condition) {
-        M model = joins == null ? copy().superUse(datasourceName) : (M) this;
+        M model = getOrCopyModel();
         if (model.joins == null) {
             model.joins = new LinkedList<>();
         }
         Join join = new Join(type, table, condition);
         model.joins.add(join);
         return new Joiner<>(model, join);
+    }
+
+
+    /**
+     * set load columns in sql
+     *
+     * @param loadColumns
+     * @return
+     */
+    public M loadColumns(String loadColumns) {
+        if (StrUtil.isBlank(loadColumns)) {
+            throw new IllegalArgumentException("loadColumns must not be null or empty.");
+        }
+        M model = getOrCopyModel();
+        model.loadColumns = loadColumns;
+        return model;
+    }
+
+
+    private M getOrCopyModel() {
+        if (isCopyModel) {
+            return (M) this;
+        } else {
+            M model = copy().superUse(datasourceName);
+            model.isCopyModel = true;
+            return model;
+        }
     }
 
 
@@ -168,7 +214,7 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
                     newDao = this.copy().superUse(configName);
                     if (newDao._getConfig() == null) {
                         if (validateExist) {
-                            throw new JbootIllegalConfigException("the datasource \"" + configName + "\" not config well, please config it.");
+                            throw new JbootIllegalConfigException("the datasource \"" + configName + "\" not config well, please config it in jboot.properties.");
                         } else {
                             return null;
                         }
@@ -219,35 +265,34 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
         Table table = _getTable();
 
         StringBuilder sql = new StringBuilder();
-        List<Object> paras = new ArrayList<Object>();
+        List<Object> paras = new ArrayList<>();
 
         Dialect dialect = _getConfig().getDialect();
-
         dialect.forModelSave(table, _getAttrs(), sql, paras);
-        // if (paras.size() == 0)	return false;	// The sql "insert into tableName() values()" works fine, so delete this line
 
-        // --------
-        Connection conn = null;
-        PreparedStatement pst = null;
-        int result = 0;
         try {
-            conn = config.getConnection();
-            if (dialect.isOracle()) {
-                pst = conn.prepareStatement(sql.toString(), table.getPrimaryKey());
-            } else {
-                pst = conn.prepareStatement(sql.toString(), Statement.RETURN_GENERATED_KEYS);
-            }
-            dialect.fillStatement(pst, paras);
-            result = pst.executeUpdate();
-            dialect.getModelGeneratedKey(this, pst, table);
-            _getModifyFlag().clear();
-            return result >= 1;
-        } catch (Exception e) {
+            return SqlDebugger.run(() -> {
+                Connection conn = null;
+                PreparedStatement pst = null;
+                int result = 0;
+                try {
+                    conn = config.getConnection();
+                    if (dialect.isOracle()) {
+                        pst = conn.prepareStatement(sql.toString(), table.getPrimaryKey());
+                    } else {
+                        pst = conn.prepareStatement(sql.toString(), Statement.RETURN_GENERATED_KEYS);
+                    }
+                    dialect.fillStatement(pst, paras);
+                    result = pst.executeUpdate();
+                    dialect.getModelGeneratedKey(this, pst, table);
+                    _getModifyFlag().clear();
+                    return result >= 1;
+                } finally {
+                    config.close(pst, conn);
+                }
+            }, config, sql.toString(), paras.toArray());
+        } catch (SQLException e) {
             throw new ActiveRecordException(e);
-        } finally {
-            //add sqlDebugger print sql
-            SqlDebugger.debug(config, sql.toString(), paras.toArray());
-            config.close(pst, conn);
         }
     }
 
@@ -277,25 +322,48 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
     }
 
     protected M loadByCache(Object... idValues) {
+
+        //临时关闭 id 缓存的情况
+        if (JbootModelHintManager.me().isClosedIdCache(getClass())){
+            try {
+                return JbootModel.super.findByIds(idValues);
+            }finally {
+                JbootModelHintManager.me().clearIdCacheFlag();
+            }
+        }
+
         try {
-            return config.getIdCache().get(_getTableName()
+            M m = config.getIdCache().get(_getTableName()
                     , buildIdCacheKey(idValues)
                     , () -> JbootModel.super.findByIds(idValues)
                     , config.getIdCacheTime());
+            return m != null && config.isIdCacheByCopyEnable() ? m.copy() : m;
         } catch (Exception ex) {
-            LOG.error(ex.toString(), ex);
+            LOG.error("Jboot load model [" + ClassUtil.getUsefulClass(getClass()) + "] by cache is error, safe deleted it in cache.", ex);
             safeDeleteCache(idValues);
         }
 
         return JbootModel.super.findByIds(idValues);
     }
 
+
+    /**
+     * 临时关闭 id 缓存，关闭后通过 findById 执行后又会开启了
+     * 一般情况下的使用方法是 DAO.closeIdCacheTemporary().findById(...)
+     * @return
+     */
+    public M closeIdCacheTemporary(){
+        JbootModelHintManager.me().closeIdCache(getClass());
+        return (M) this;
+    }
+
+
     protected void safeDeleteCache(Object... idValues) {
         try {
             config.getIdCache().remove(_getTableName()
                     , buildIdCacheKey(idValues));
         } catch (Exception ex) {
-            LOG.error("remove cache exception by name [" + _getTableName() + "] and key [" + buildIdCacheKey(idValues) + "]", ex);
+            LOG.error("Remove cache is error by name [" + _getTableName() + "] and key [" + buildIdCacheKey(idValues) + "]", ex);
         }
     }
 
@@ -339,7 +407,7 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
 
     public boolean deleteByColumns(List<Column> columns) {
-        String sql = _getDialect().forDeleteByColumns(joins, _getTableName(), columns);
+        String sql = _getDialect().forDeleteByColumns(alias, joins, _getTableName(), columns);
         return Db.use(_getConfig().getName()).update(sql, Util.getValueArray(columns)) >= 1;
     }
 
@@ -445,11 +513,17 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
 
     public M findFirstByColumns(Columns columns, String orderby) {
-        return findFirstByColumns(columns, orderby, "*");
+        return findFirstByColumns(columns, orderby, null);
     }
 
     public M findFirstByColumns(Columns columns, String orderby, String loadColumns) {
-        String sql = _getDialect().forFindByColumns(joins, _getTableName(), loadColumns, columns.getList(), orderby, 1);
+        if (StrUtil.isBlank(loadColumns) && this.loadColumns != null) {
+            loadColumns = this.loadColumns;
+        }
+        if (StrUtil.isBlank(loadColumns)) {
+            loadColumns = "*";
+        }
+        String sql = _getDialect().forFindByColumns(alias, joins, _getTableName(), loadColumns, columns.getList(), orderby, 1);
         return columns.isEmpty() ? findFirst(sql) : findFirst(sql, columns.getValueArray());
     }
 
@@ -571,11 +645,17 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
     }
 
     public List<M> findListByColumns(Columns columns, String orderBy, Integer count) {
-        return findListByColumns(columns, orderBy, count, "*");
+        return findListByColumns(columns, orderBy, count, null);
     }
 
     public List<M> findListByColumns(Columns columns, String orderBy, Integer count, String loadColumns) {
-        String sql = _getDialect().forFindByColumns(joins, _getTableName(), loadColumns, columns.getList(), orderBy, count);
+        if (StrUtil.isBlank(loadColumns) && this.loadColumns != null) {
+            loadColumns = this.loadColumns;
+        }
+        if (StrUtil.isBlank(loadColumns)) {
+            loadColumns = "*";
+        }
+        String sql = _getDialect().forFindByColumns(alias, joins, _getTableName(), loadColumns, columns.getList(), orderBy, count);
         return columns.isEmpty() ? find(sql) : find(sql, columns.getValueArray());
     }
 
@@ -616,16 +696,41 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
 
     public Page<M> paginateByColumns(int pageNumber, int pageSize, Columns columns, String orderBy) {
-        return paginateByColumns(pageNumber, pageSize, columns, orderBy, "*");
+        return paginateByColumns(pageNumber, pageSize, columns, orderBy, null);
     }
 
     public Page<M> paginateByColumns(int pageNumber, int pageSize, Columns columns, String orderBy, String loadColumns) {
-        String selectPartSql = _getDialect().forPaginateSelect(loadColumns);
-        String fromPartSql = _getDialect().forPaginateFrom(joins, _getTableName(), columns.getList(), orderBy);
+        if (StrUtil.isBlank(loadColumns) && this.loadColumns != null) {
+            loadColumns = this.loadColumns;
+        }
+        if (StrUtil.isBlank(loadColumns)) {
+            loadColumns = "*";
+        }
 
-        return columns.isEmpty()
-                ? paginate(pageNumber, pageSize, selectPartSql, fromPartSql)
-                : paginate(pageNumber, pageSize, selectPartSql, fromPartSql, columns.getValueArray());
+        String selectPartSql = _getDialect().forPaginateSelect(loadColumns);
+        String fromPartSql = _getDialect().forPaginateFrom(alias, joins, _getTableName(), columns.getList(), orderBy);
+
+//        return columns.isEmpty()
+//                ? paginate(pageNumber, pageSize, selectPartSql, fromPartSql)
+//                : paginate(pageNumber, pageSize, selectPartSql, fromPartSql, columns.getValueArray());
+
+        Config config = _getConfig();
+        Connection conn = null;
+        try {
+            conn = config.getConnection();
+//            String totalRowSql = config.dialect.forPaginateTotalRow(select, sqlExceptSelect, this);
+            String totalRowSqlExceptSelect = _getDialect().forPaginateFrom(alias, joins, _getTableName(), columns.getList(), null);
+            String totalRowSql = config.getDialect().forPaginateTotalRow(selectPartSql, totalRowSqlExceptSelect,this);
+
+            StringBuilder findSql = new StringBuilder();
+            findSql.append(selectPartSql).append(' ').append(fromPartSql);
+
+            return doPaginateByFullSql(config, conn, pageNumber, pageSize, null, totalRowSql, findSql,  columns.getValueArray());
+        } catch (Exception e) {
+            throw new ActiveRecordException(e);
+        } finally {
+            config.close(conn);
+        }
     }
 
 
@@ -635,7 +740,7 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
 
     public long findCountByColumns(Columns columns) {
-        String sql = _getDialect().forFindCountByColumns(joins, _getTableName(), columns.getList());
+        String sql = _getDialect().forFindCountByColumns(alias, joins, _getTableName(), columns.getList());
         Long value = Db.use(_getConfig().getName()).queryLong(sql, Util.getValueArray(columns.getList()));
         return value == null ? 0 : value;
     }
@@ -673,7 +778,7 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
             table = super._getTable();
             if (table == null && validateMapping) {
                 throw new JbootException(
-                        String.format("class %s can not mapping to database table,maybe application cannot connect to database. "
+                        String.format("class %s can not mapping to database table, maybe application cannot connect to database. "
                                 , _getUsefulClass().getName()));
             }
         }
@@ -716,15 +821,7 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
 
 
     @Override
-    protected List<M> find(Config config, String sql, Object... paras) {
-        SqlDebugger.debug(config, sql, paras);
-        return super.find(config, sql, paras);
-    }
-
-
-    @Override
     public boolean equals(Object o) {
-
         if (o == null || !(o instanceof JbootModel)) {
             return false;
         }
@@ -777,6 +874,32 @@ public class JbootModel<M extends JbootModel<M>> extends Model<M> {
         }
 
         return (M) this;
+    }
+
+
+    /**
+     * Override for print sql
+     *
+     * @param config
+     * @param conn
+     * @param sql
+     * @param paras
+     * @return
+     * @throws Exception
+     */
+    @Override
+    protected List<M> find(Config config, Connection conn, String sql, Object... paras) throws Exception {
+        return SqlDebugger.run(() -> {
+            try {
+                return super.find(config, conn, sql, paras);
+            } catch (Exception e) {
+                if (e instanceof SQLException) {
+                    throw (SQLException) e;
+                } else {
+                    throw new SQLException(e);
+                }
+            }
+        }, config, sql, paras);
     }
 
 }

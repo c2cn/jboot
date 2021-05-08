@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ public class JbootSeataManager {
     private boolean enable = false;
 
     private TransactionalTemplate transactionalTemplate;
-    private GlobalLockTemplate<Object> globalLockTemplate;
+    private GlobalLockTemplate globalLockTemplate;
     private SeataGlobalTransactionManager transactionManager;
 
 
@@ -65,10 +65,11 @@ public class JbootSeataManager {
                 config.getTxServiceGroup(),
                 config.getMode()
         );
+
         transactionManager.init();
 
         this.transactionalTemplate = new TransactionalTemplate();
-        this.globalLockTemplate = new GlobalLockTemplate<>();
+        this.globalLockTemplate = new GlobalLockTemplate();
         this.enable = true;
     }
 
@@ -117,11 +118,11 @@ public class JbootSeataManager {
         this.transactionalTemplate = transactionalTemplate;
     }
 
-    public GlobalLockTemplate<Object> getGlobalLockTemplate() {
+    public GlobalLockTemplate getGlobalLockTemplate() {
         return globalLockTemplate;
     }
 
-    public void setGlobalLockTemplate(GlobalLockTemplate<Object> globalLockTemplate) {
+    public void setGlobalLockTemplate(GlobalLockTemplate globalLockTemplate) {
         this.globalLockTemplate = globalLockTemplate;
     }
 

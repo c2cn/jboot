@@ -16,10 +16,14 @@ Jboot 已经内置基础的网关，网关功能目前暂时只能通过在 jboo
 
 如下是一个正常的 gateway 配置。
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
+
+
+jboot.gateway.uriHealthCheckEnable = true
+jboot.gateway.uriHealthCheckPath = /your-health-check-path
 
 jboot.gateway.sentinelEnable = false
 jboot.gateway.sentinelBlockPage = /block
@@ -30,6 +34,7 @@ jboot.gateway.proxyConnectTimeout = 5000
 jboot.gateway.proxyContentType = text/html;charset=utf-8
 
 jboot.gateway.interceptors = com.xxx.Interceptor1,com.xxx.Interceptor2
+jboot.gateway.loadBalanceStrategy = com.xxx.loadBalanceStrategy1
 
 jboot.gateway.pathEquals = /path
 jboot.gateway.pathContains = /path
@@ -45,9 +50,13 @@ jboot.gateway.queryEquals = aa:bb,cc:dd
 jboot.gateway.queryContains = aa,bb
 ```
 
+
+
 - name 设置路由的名称
 - uri 设置路由目标网址，可以配置多个 uri，多个 uri 用英文逗号（,） 隔开，当有多个 uri 的时候，系统会 **随机** 使用其中一个去访问
 - enable 是否启用该路由
+- uriHealthCheckEnable 是否启用健康检查功能
+- uriHealthCheckPath URI 健康检查路径，当配置 uriHealthCheckPath 后，健康检查的 url 地址为 uri + uriHealthCheckPath，当健康检查目标网址的 http code 为 200 时，表示健康状态，否则为非健康状态。
 - sentinelEnable 是否启用 sentinel 限流功能
 - sentinelBlockPage 若该路由被限流后，网页自动跳转到哪个网址
 - sentinelBlockJsonMap 若该路由被限流后，自动渲染的 jsonMap，若 sentinelBlockPage 已经配置，则 sentinelBlockJsonMap 配置无效
@@ -55,6 +64,10 @@ jboot.gateway.queryContains = aa,bb
 - proxyConnectTimeout 发生路由后，默认的连接超时时间，默认为 5 秒
 - proxyContentType 发生路由后，返回给浏览器的 http-content-type，默认为：text/html;charset=utf-8
 - interceptors 网关拦截器，一般用于进行鉴权等功能，配置类名，多个拦截器用英文逗号隔开，拦截器必须实现 GatewayInterceptor 接口
+- loadBalanceStrategy 负载均衡策略，当配置了多个 uri 的时候，可以通过此策略对 uri 进行获取
+
+> 注意：开启健康检查后，当所有的目标地址都不健康的时候，会渲染 "none health url in gateway" 的错误信息。
+> 我们可以通过 `JbootGatewayManager.me().setNoneHealthUrlErrorRender()` 来自定义渲染功能。
 
 ## Path 路由
 
@@ -62,7 +75,7 @@ Path 路由一般是最常用的路由之一，是根据域名之后的路径进
 
 **1、pathEquals**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -74,7 +87,7 @@ jboot.gateway.pathEquals = /user
 
 **2、pathContains**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -87,7 +100,7 @@ jboot.gateway.pathContains = /user
 
 **3、pathStartsWith**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -99,7 +112,7 @@ jboot.gateway.pathStartsWith = /user
 
 **4、pathEndsWith**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -116,7 +129,7 @@ Host 路由是根据域名进行路由的，Jboot 对 Host 路由提供了 4 中
 
 **1、hostEquals**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -128,7 +141,7 @@ jboot.gateway.hostEquals = xxx.xxx.com
 
 **2、hostContains**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -141,7 +154,7 @@ jboot.gateway.hostContains = xxx.xxx.com
 
 **3、hostStartsWith**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -153,7 +166,7 @@ jboot.gateway.hostStartsWith = xxx
 
 **4、hostEndsWith**
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -169,7 +182,8 @@ jboot.gateway.hostEndsWith = com
 
 
 **1、queryEquals**
-```
+
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -180,7 +194,8 @@ jboot.gateway.queryEquals = aaa:bbb
 以上配置中，如果用户访问 `www.xxx.com/controller?aaa=bbb` 会自动路由到 `http://youdomain:8080/controller?aaa=bbb` ，但是如果用户访问 `www.xxx.com/controller?aaa=ccc`不会路由。
 
 **2、queryContains**
-```
+
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true
@@ -194,7 +209,7 @@ jboot.gateway.queryContains = aaa
 
 ## 多个 Gateway 配置
 
-```
+```properties
 jboot.gateway.aaa.name = name
 jboot.gateway.aaa.uri = http://youdomain:8080
 jboot.gateway.aaa.enable = true
@@ -263,7 +278,7 @@ jboot.gateway.xxx.queryContains = aa,bb
 
 比如:
 
-```
+```properties
 jboot.gateway.name = name
 jboot.gateway.uri = http://youdomain:8080
 jboot.gateway.enable = true

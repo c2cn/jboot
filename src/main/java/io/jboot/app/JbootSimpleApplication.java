@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,13 @@ package io.jboot.app;
 
 import com.jfinal.config.Interceptors;
 import com.jfinal.config.Plugins;
+import com.jfinal.core.JFinal;
 import com.jfinal.plugin.IPlugin;
 import io.jboot.app.config.JbootConfigManager;
 import io.jboot.core.JbootCoreConfig;
 
+import java.lang.reflect.Method;
+import java.text.DecimalFormat;
 import java.util.List;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -39,10 +42,12 @@ public class JbootSimpleApplication {
     }
 
     public static void setBootArg(String key, Object value) {
-        JbootConfigManager.me().setBootArg(key, value);
+        JbootConfigManager.setBootArg(key, value);
     }
 
     public static void run(String[] args) {
+
+        long startTimeMillis = System.currentTimeMillis();
 
         JbootApplicationConfig appConfig = ApplicationUtil.getAppConfig(args);
         ApplicationUtil.printBannerInfo(appConfig);
@@ -50,22 +55,47 @@ public class JbootSimpleApplication {
         ApplicationUtil.printClassPath();
 
         JbootCoreConfig coreConfig = new JbootCoreConfig();
-        new RPCServer(coreConfig).start();
+        new SimpleServer(coreConfig, startTimeMillis).start();
     }
 
 
-    static class RPCServer extends Thread {
+    static class SimpleServer extends Thread {
 
         private final JbootCoreConfig coreConfig;
+        private final long startTimeMillis;
         private final Plugins plugins = new Plugins();
         private final Interceptors interceptors = new Interceptors();
 
-        public RPCServer(JbootCoreConfig coreConfig) {
+        public SimpleServer(JbootCoreConfig coreConfig, long startTimeMillis) {
             this.coreConfig = coreConfig;
-            doInit();
+            this.startTimeMillis = startTimeMillis;
+
+            doConfigJFinalPathKit();
+            doInitCoreConfig();
         }
 
-        private void doInit() {
+
+        private void doConfigJFinalPathKit() {
+            try {
+                Class<?> c = JbootSimpleApplication.class.getClassLoader().loadClass("com.jfinal.kit.PathKit");
+                Method setWebRootPath = c.getMethod("setWebRootPath", String.class);
+                String webRootPath = PathKitExt.getWebRootPath();
+                setWebRootPath.invoke(null, webRootPath);
+
+                // -------
+                Method setRootClassPath = c.getMethod("setRootClassPath", String.class);
+                String rootClassPath = PathKitExt.getRootClassPath();
+                setRootClassPath.invoke(null, rootClassPath);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+        private void doInitCoreConfig() {
+
+            //constants
+            coreConfig.configConstant(JFinal.me().getConstants());
+
             //aop interceptors
             coreConfig.configInterceptor(interceptors);
 
@@ -98,38 +128,45 @@ public class JbootSimpleApplication {
 
         @Override
         public void run() {
+            String seconds = new DecimalFormat("#.#").format((System.currentTimeMillis() - startTimeMillis) / 1000F);
+            System.out.println("JbootApplication has started in " + seconds + " seconds. Welcome To The Jboot World (^_^)\n\n");
+
             initShutdownHook();
-            await();
+            startAwait();
         }
 
-        private void await() {
-            try {
-                LOCK.lock();
-                STOP.await();
-            } catch (InterruptedException e) {
-                System.err.println("jboot rpc application has stopped, interrupted by other thread!");
-            } finally {
-                LOCK.unlock();
-            }
-        }
 
         private void initShutdownHook() {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("\nJbootApplication shutdown, please wait ...... ");
                 try {
                     coreConfig.onStop();
                 } catch (Exception e) {
-                    System.err.println("jboot rpc stop exception : " + e.toString());
+                    System.out.println("JbootApplication shutdown exception: " + e.toString());
                 }
-
-                System.err.println("jboot rpc application exit, all service stopped.");
+                System.out.println("JbootApplication has exited, all services stopped.");
                 try {
                     LOCK.lock();
                     STOP.signal();
                 } finally {
                     LOCK.unlock();
                 }
-            }, "jboot-rpc-application-hook"));
+            }, "jboot-simple-application-hook"));
         }
+
+
+        private void startAwait() {
+            try {
+                LOCK.lock();
+                STOP.await();
+            } catch (InterruptedException e) {
+                System.out.println("JbootApplication has stopped, interrupted by other thread!");
+            } finally {
+                LOCK.unlock();
+            }
+        }
+
+
     }
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,15 +35,16 @@ public class JbootGatewayManager {
         return me;
     }
 
-    private Map<String, JbootGatewayConfig> configMap;
+    private ConcurrentHashMap<String, JbootGatewayConfig> configMap;
 
-    public void init() {
+    private GatewayErrorRender gatewayErrorRender;
+
+    private JbootGatewayManager() {
         Map<String, JbootGatewayConfig> configMap = JbootConfigUtil.getConfigModels(JbootGatewayConfig.class, "jboot.gateway");
-        if (configMap != null && !configMap.isEmpty()) {
-
+        if (!configMap.isEmpty()) {
             for (Map.Entry<String, JbootGatewayConfig> e : configMap.entrySet()) {
                 JbootGatewayConfig config = e.getValue();
-                if (config.isConfigOk() && config.isEnable()) {
+                if (config.isConfigOk()) {
                     if (StrUtil.isBlank(config.getName())) {
                         config.setName(e.getKey());
                     }
@@ -62,6 +63,29 @@ public class JbootGatewayManager {
     }
 
 
+    public boolean isConfigOkAndEnable() {
+        if (configMap == null || configMap.isEmpty()) {
+            return false;
+        }
+
+        for (JbootGatewayConfig config : configMap.values()) {
+            if (config.isEnable()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    public void init() {
+        // 启动定时健康检查
+        if (isConfigOkAndEnable()) {
+            JbootGatewayHealthChecker.me().start();
+        }
+    }
+
+
     public JbootGatewayConfig removeConfig(String name) {
         return configMap == null ? null : configMap.remove(name);
     }
@@ -76,6 +100,12 @@ public class JbootGatewayManager {
         return configMap;
     }
 
+    /**
+     * 匹配可用的网关
+     *
+     * @param req 请求
+     * @return 返回匹配到的网关配置
+     */
     public JbootGatewayConfig matchingConfig(HttpServletRequest req) {
         if (configMap != null && !configMap.isEmpty()) {
             Iterator<JbootGatewayConfig> iterator = configMap.values().iterator();
@@ -88,6 +118,15 @@ public class JbootGatewayManager {
         }
         return null;
     }
+
+    public GatewayErrorRender getGatewayErrorRender() {
+        return gatewayErrorRender;
+    }
+
+    public void setGatewayErrorRender(GatewayErrorRender gatewayErrorRender) {
+        this.gatewayErrorRender = gatewayErrorRender;
+    }
+
 
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,14 @@
  */
 package io.jboot.components.gateway;
 
+import com.google.common.collect.Sets;
 import io.jboot.exception.JbootIllegalConfigException;
 import io.jboot.utils.ClassUtil;
 import io.jboot.utils.StrUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.*;
 
 /**
  * @author michael yang (fuhai999@gmail.com)
@@ -33,9 +31,20 @@ import java.util.concurrent.ThreadLocalRandom;
 public class JbootGatewayConfig implements Serializable {
 
     public static final String DEFAULT_PROXY_CONTENT_TYPE = "text/html;charset=utf-8";
+    public static final GatewayInterceptor[] EMPTY_GATEWAY_INTERCEPTOR_ARRAY = new GatewayInterceptor[0];
 
     private String name;
     private String[] uri;
+
+
+    // 是否启用健康检查
+    private boolean uriHealthCheckEnable;
+
+    // URI 健康检查路径，要求服务 statusCode = 200
+    // 当配置 uriHealthCheckPath 后，健康检查的 url 地址为 uri + uriHealthCheckPath
+    private String uriHealthCheckPath;
+
+    // 是否启用
     private boolean enable = false;
 
     // 是否启用 sentinel 限流
@@ -69,10 +78,14 @@ public class JbootGatewayConfig implements Serializable {
 
     //拦截器配置，一般可以用于对请求进行 鉴权 等处理
     private String[] interceptors;
+    private String loadBalanceStrategy;
 
 //    暂时不支持 cookie
 //    private Map<String, String> cookieEquals;
 //    private String[] cookieContains;
+
+    //不健康的 URI 地址
+    private Set<String> unHealthUris = Collections.synchronizedSet(new HashSet<>());
 
 
     public String getName() {
@@ -92,15 +105,45 @@ public class JbootGatewayConfig implements Serializable {
         this.uri = uri;
     }
 
-    public String getRandomUri() {
-        if (uri == null || uri.length == 0) {
-            return null;
-        } else if (uri.length == 1) {
-            return uri[0];
-        } else {
-            return uri[ThreadLocalRandom.current().nextInt(uri.length)];
+
+    //健康的 URI 缓存
+    private String[] healthUris;
+
+    //健康 URI 是否有变化的标识
+    private boolean healthUriChanged = true;
+
+    public String[] getHealthUris() {
+        if (healthUriChanged) {
+            synchronized (this) {
+                if (healthUriChanged) {
+                    HashSet<String> healthUriSet = Sets.newHashSet(uri);
+                    if (!unHealthUris.isEmpty()) {
+                        healthUriSet.removeAll(unHealthUris);
+                    }
+                    healthUris = healthUriSet.isEmpty() ? null : healthUriSet.toArray(new String[healthUriSet.size()]);
+                    healthUriChanged = false;
+                }
+            }
         }
+        return healthUris;
     }
+
+    public boolean isUriHealthCheckEnable() {
+        return uriHealthCheckEnable;
+    }
+
+    public void setUriHealthCheckEnable(boolean uriHealthCheckEnable) {
+        this.uriHealthCheckEnable = uriHealthCheckEnable;
+    }
+
+    public String getUriHealthCheckPath() {
+        return uriHealthCheckPath;
+    }
+
+    public void setUriHealthCheckPath(String uriHealthCheckPath) {
+        this.uriHealthCheckPath = uriHealthCheckPath;
+    }
+
 
     public boolean isEnable() {
         return enable;
@@ -255,27 +298,71 @@ public class JbootGatewayConfig implements Serializable {
     }
 
 
-    private GatewayInterceptor[] inters;
+    private GatewayInterceptor[] gatewayInterceptors;
 
-    public GatewayInterceptor[] buildInterceptors() {
-        if (interceptors == null || interceptors.length == 0) {
-            return null;
-        }
-        if (inters == null) {
+    public GatewayInterceptor[] getGatewayInterceptors() {
+        if (gatewayInterceptors == null) {
             synchronized (this) {
-                if (inters == null) {
-                    inters = new GatewayInterceptor[interceptors.length];
-                    for (int i = 0; i < interceptors.length; i++) {
-                        GatewayInterceptor interceptor = ClassUtil.newInstance(interceptors[i]);
-                        if (interceptor == null) {
-                            throw new NullPointerException("can not new instance by class:" + interceptors[i]);
+                if (gatewayInterceptors == null) {
+                    if (interceptors == null || interceptors.length == 0) {
+                        gatewayInterceptors = EMPTY_GATEWAY_INTERCEPTOR_ARRAY;
+                    } else {
+                        gatewayInterceptors = new GatewayInterceptor[interceptors.length];
+                        for (int i = 0; i < interceptors.length; i++) {
+                            GatewayInterceptor interceptor = ClassUtil.newInstance(interceptors[i]);
+                            if (interceptor == null) {
+                                throw new NullPointerException("can not new instance by class:" + interceptors[i]);
+                            }
+                            gatewayInterceptors[i] = interceptor;
                         }
-                        inters[i] = interceptor;
                     }
                 }
             }
         }
-        return inters;
+        return gatewayInterceptors;
+    }
+
+
+    public void setGatewayInterceptors(GatewayInterceptor[] gatewayInterceptors) {
+        this.gatewayInterceptors = gatewayInterceptors;
+    }
+
+
+    public String getLoadBalanceStrategy() {
+        return loadBalanceStrategy;
+    }
+
+    public void setLoadBalanceStrategy(String loadBalanceStrategy) {
+        this.loadBalanceStrategy = loadBalanceStrategy;
+    }
+
+    private GatewayLoadBalanceStrategy gatewayLoadBalanceStrategy;
+
+    public GatewayLoadBalanceStrategy buildLoadBalanceStrategy() {
+        if (gatewayLoadBalanceStrategy != null) {
+            return gatewayLoadBalanceStrategy;
+        }
+
+        if (gatewayLoadBalanceStrategy == null) {
+            synchronized (this) {
+                if (gatewayLoadBalanceStrategy == null) {
+                    if (StrUtil.isBlank(loadBalanceStrategy)) {
+                        gatewayLoadBalanceStrategy = GatewayLoadBalanceStrategy.DEFAULT_STRATEGY;
+                    } else {
+                        GatewayLoadBalanceStrategy glbs = ClassUtil.newInstance(loadBalanceStrategy);
+                        if (glbs == null) {
+                            throw new NullPointerException("Can not new instance by class: " + loadBalanceStrategy);
+                        }
+                        gatewayLoadBalanceStrategy = glbs;
+                    }
+                }
+            }
+        }
+        return gatewayLoadBalanceStrategy;
+    }
+
+    public void setGatewayLoadBalanceStrategy(GatewayLoadBalanceStrategy strategy) {
+        this.gatewayLoadBalanceStrategy = strategy;
     }
 
 
@@ -300,7 +387,7 @@ public class JbootGatewayConfig implements Serializable {
         for (String u : uri) {
             if (!u.toLowerCase().startsWith("http://")
                     && !u.toLowerCase().startsWith("https://")) {
-                throw new JbootIllegalConfigException("gateway uri must start with http:// or https://");
+                throw new JbootIllegalConfigException("Gateway uri must start with http:// or https://");
             }
         }
     }
@@ -378,8 +465,8 @@ public class JbootGatewayConfig implements Serializable {
         }
 
         if (queryContains != null || queryEquals != null) {
-            Map<String, String> queryMap = queryStringToMap(request.getQueryString());
-            if (queryMap != null && !queryMap.isEmpty()) {
+            Map<String, String> queryMap = StrUtil.queryStringToMap(request.getQueryString());
+            if (!queryMap.isEmpty()) {
 
                 if (queryContains != null) {
                     for (String q : queryContains) {
@@ -404,24 +491,20 @@ public class JbootGatewayConfig implements Serializable {
         return false;
     }
 
-
-    private static Map<String, String> queryStringToMap(String queryString) {
-        if (StrUtil.isBlank(queryString)) {
-            return null;
+    public void addUnHealthUri(String uri) {
+        if (unHealthUris.add(uri)) {
+            healthUriChanged = true;
         }
-        String[] params = queryString.split("&");
-        Map<String, String> resMap = new HashMap<>();
-        for (int i = 0; i < params.length; i++) {
-            String[] param = params[i].split("=");
-            if (param.length >= 2) {
-                String key = param[0];
-                String value = param[1];
-                for (int j = 2; j < param.length; j++) {
-                    value += "=" + param[j];
-                }
-                resMap.put(key, value);
+    }
+
+
+    public void removeUnHealthUri(String uri) {
+        if (unHealthUris.size() > 0) {
+            if (unHealthUris.remove(uri)) {
+                healthUriChanged = true;
             }
         }
-        return resMap;
     }
+
+
 }

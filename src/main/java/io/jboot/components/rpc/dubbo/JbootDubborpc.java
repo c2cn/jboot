@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,18 @@ package io.jboot.components.rpc.dubbo;
 import io.jboot.components.rpc.JbootrpcBase;
 import io.jboot.components.rpc.JbootrpcReferenceConfig;
 import io.jboot.components.rpc.JbootrpcServiceConfig;
+import io.jboot.components.rpc.RPCUtil;
 import io.jboot.utils.StrUtil;
+import org.apache.dubbo.common.URL;
 import org.apache.dubbo.config.ReferenceConfig;
 import org.apache.dubbo.config.ServiceConfig;
+
 
 public class JbootDubborpc extends JbootrpcBase {
 
     @Override
     public void onStart() {
         DubboUtil.initDubbo();
-        setStarted(true);
     }
 
     @Override
@@ -42,6 +44,9 @@ public class JbootDubborpc extends JbootrpcBase {
 
         String directUrl = rpcConfig.getUrl(interfaceClass.getName());
         if (StrUtil.isNotBlank(directUrl)) {
+            if (URL.valueOf(directUrl).getProtocol() == null) {
+                directUrl = "dubbo://" + directUrl;
+            }
             reference.setUrl(directUrl);
         }
 
@@ -50,6 +55,10 @@ public class JbootDubborpc extends JbootrpcBase {
             reference.setConsumer(DubboUtil.getConsumer(consumer));
         }
 
+        //copy consumer config to Refercence
+        RPCUtil.copyNotNullFields(reference.getConsumer(), reference, false);
+
+
         if (reference.getGroup() == null) {
             reference.setGroup(rpcConfig.getGroup(interfaceClass.getName()));
         }
@@ -57,6 +66,7 @@ public class JbootDubborpc extends JbootrpcBase {
         if (reference.getVersion() == null) {
             reference.setVersion(rpcConfig.getVersion(interfaceClass.getName()));
         }
+
 
         return reference.get();
     }
@@ -72,6 +82,10 @@ public class JbootDubborpc extends JbootrpcBase {
         if (provider != null) {
             service.setProvider(DubboUtil.getProvider(provider));
         }
+
+        //copy provider config to Service
+        RPCUtil.copyNotNullFields(service.getProvider(), service, true);
+
 
         if (service.getGroup() == null) {
             service.setGroup(rpcConfig.getGroup(interfaceClass.getName()));

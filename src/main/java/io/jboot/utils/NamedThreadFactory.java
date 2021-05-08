@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @Date: 2019/11/21
  */
 public class NamedThreadFactory implements ThreadFactory {
+
     protected static final AtomicInteger POOL_COUNTER = new AtomicInteger(1);
     protected final AtomicInteger mThreadCounter;
     protected final String mPrefix;

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,9 @@ package io.jboot.app.config;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
-import com.jfinal.kit.LogKit;
 import io.jboot.app.config.annotation.ConfigModel;
 import io.jboot.app.config.support.apollo.ApolloConfigManager;
 import io.jboot.app.config.support.nacos.NacosConfigManager;
-import io.jboot.utils.StrUtil;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -67,15 +65,19 @@ public class JbootConfigManager {
 
     private void init() {
 
-        mainProperties = new Prop("jboot.properties").getProperties();
+        mainProperties = new JbootProp("jboot.properties").getProperties();
 
         String mode = getConfigValue("jboot.app.mode");
 
         if (ConfigUtil.isNotBlank(mode)) {
-            String p = String.format("jboot-%s.properties", mode);
-            mainProperties.putAll(new Prop(p).getProperties());
+            String modePropertiesName = "jboot-" + mode + ".properties";
+            mainProperties.putAll(new JbootProp(modePropertiesName).getProperties());
         }
 
+        Properties externalProperties = ConfigUtil.readExternalProperties();
+        if (externalProperties != null && !externalProperties.isEmpty()) {
+            mainProperties.putAll(externalProperties);
+        }
 
         NacosConfigManager.me().init(this);
         ApolloConfigManager.me().init(this);
@@ -164,17 +166,17 @@ public class JbootConfigManager {
         return get(clazz, prefix, file);
     }
 
+
     private void refreshMainProperties() {
 
-        Properties properties = new Prop("jboot.properties").getProperties();
+        Properties properties = new JbootProp("jboot.properties").getProperties();
         mainProperties.putAll(properties);
 
         String mode = getConfigValue(properties, "jboot.app.mode");
         if (ConfigUtil.isNotBlank(mode)) {
-            String p = String.format("jboot-%s.properties", mode);
-            mainProperties.putAll(new Prop(p).getProperties());
+            String modePropertiesName = "jboot-" + mode + ".properties";
+            mainProperties.putAll(new JbootProp(modePropertiesName).getProperties());
         }
-
     }
 
 
@@ -188,36 +190,32 @@ public class JbootConfigManager {
      * @return
      */
     public <T> T createConfigObject(Class<T> clazz, String prefix, String file) {
-        Object configObject = ConfigUtil.newInstance(clazz);
-        List<Method> setterMethods = ConfigUtil.getClassSetMethods(clazz);
-        if (setterMethods != null) {
-            for (Method setterMethod : setterMethods) {
+        T configObject = ConfigUtil.newInstance(clazz);
+        for (Method setterMethod : ConfigUtil.getClassSetMethods(clazz)) {
+            String key = buildKey(prefix, setterMethod);
+            String value = getConfigValue(key);
 
-                String key = buildKey(prefix, setterMethod);
-                String value = getConfigValue(key);
-
-                if (ConfigUtil.isNotBlank(file)) {
-                    Prop prop = new Prop(file);
-                    String filePropValue = getConfigValue(prop.getProperties(), key);
-                    if (ConfigUtil.isNotBlank(filePropValue)) {
-                        value = filePropValue;
-                    }
+            if (ConfigUtil.isNotBlank(file)) {
+                JbootProp prop = new JbootProp(file);
+                String filePropValue = getConfigValue(prop.getProperties(), key);
+                if (ConfigUtil.isNotBlank(filePropValue)) {
+                    value = filePropValue;
                 }
+            }
 
-                if (ConfigUtil.isNotBlank(value)) {
-                    Object val = ConfigUtil.convert(setterMethod.getParameterTypes()[0], value, setterMethod.getGenericParameterTypes()[0]);
-                    if (val != null) {
-                        try {
-                            setterMethod.invoke(configObject, val);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            if (ConfigUtil.isNotBlank(value)) {
+                Object val = ConfigUtil.convert(setterMethod.getParameterTypes()[0], value, setterMethod.getGenericParameterTypes()[0]);
+                if (val != null) {
+                    try {
+                        setterMethod.invoke(configObject, val);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
             }
         }
 
-        return (T) configObject;
+        return configObject;
     }
 
 
@@ -236,23 +234,13 @@ public class JbootConfigManager {
 
 
     public String getConfigValue(Properties properties, String key) {
-        if (StrUtil.isBlank(key)) {
+        if (ConfigUtil.isBlank(key)) {
             return "";
         }
         String originalValue = getOriginalConfigValue(properties, key);
         String stringValue = decryptor != null ? decryptor.decrypt(key, originalValue) : originalValue;
 
-        List<ConfigPart> configParts = ConfigUtil.parseParts(stringValue);
-        if (configParts == null || configParts.isEmpty()) {
-            return stringValue;
-        }
-
-        for (ConfigPart cp : configParts) {
-            String value = getConfigValue(properties, cp.getKey());
-            value = StrUtil.isNotBlank(value) ? value : cp.getDefaultValue();
-            stringValue = stringValue.replace(cp.getPartString(), value);
-        }
-        return stringValue;
+        return ConfigUtil.parseValue(stringValue);
     }
 
 
@@ -361,6 +349,14 @@ public class JbootConfigManager {
         remoteProperties.put(key, value);
     }
 
+
+    public void removeRemoteProperty(String key) {
+        if (remoteProperties != null) {
+            remoteProperties.remove(key);
+        }
+    }
+
+
     public void setRemoteProperties(Map map) {
         if (remoteProperties == null) {
             synchronized (this) {
@@ -425,7 +421,7 @@ public class JbootConfigManager {
             try {
                 listener.onChange(key, newValue, oldValue);
             } catch (Throwable ex) {
-                LogKit.error(ex.toString(), ex);
+                com.jfinal.kit.LogKit.error(ex.toString(), ex);
             }
         }
     }
@@ -436,7 +432,7 @@ public class JbootConfigManager {
      *
      * @param args
      */
-    public void parseArgs(String[] args) {
+    public static void parseArgs(String[] args) {
         if (args == null || args.length == 0) {
             return;
         }
@@ -451,7 +447,7 @@ public class JbootConfigManager {
         }
     }
 
-    public void setBootArg(String key, Object value) {
+    public static void setBootArg(String key, Object value) {
         if (argMap == null) {
             argMap = new HashMap<>();
         }

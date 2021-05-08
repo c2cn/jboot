@@ -12,27 +12,44 @@ JWT 是 Json web token 的简称, 是为了在网络应用环境间传递声明�
 
 ## JWT 配置
 
-- jboot.web.jwt.httpHeaderName：配置JWT的http头的key，默认为 `Jwt`
-- jboot.web.jwt.secret：配置JWT的密钥
-- jboot.web.jwt.validityPeriod：配置JWT的过期时间，默认不过期
+在使用 JWT 之前，我们需要对 JWT 进行一些必要的配置。
+
+- jboot.web.jwt.httpHeaderName：配置 JWT 的 http 头的 key，默认为 `Jwt`，可以不配置。
+- jboot.web.jwt.secret：配置 JWT 的密钥，必须配置，否则使用 jwt 会抛出异常或给出警告。
+- jboot.web.jwt.validityPeriod：配置 JWT 的过期时间，默认永不不过期。
 
 
 ## JWT 使用
 
-在 `JbootController` 中，新增了如下几个用于操作 JWT 的方法：
+在 `JbootController` 中，新增了如下几个用于操作 JWT 的方法，在使用 Jwt 之前，需要在使用 Jwt 的 Controller
+里添加注解 `@EnableJwt` ，才能够正常的生成和刷新 Jwt 。当有很多个 Controller 都使用 Jwt 的话，可以直接 创建
+一个 BaseController，然后在 BaseController 里添加注解 `@EnableJwt`。
+
 
 - setJwtAttr()：设置 jwt 的 key 和 value
 - setJwtMap()：把整个 map的key和value 设置到 jwt
 - getJwtAttr()：获取 已经设置进去的 jwt 信息
 - getJwtAttrs()：获取 所有已经设置进去的 jwt 信息
-- getJwtPara()：获取客户端传进来的 jwt 信息，若 jwt 超时或者不被信任，那么获取到的内容为null
+- getJwtPara()：获取客户端传进来的 jwt 信息，若 jwt 超时或者不被信任，那么获取到的内容为 null
+- getJwtParaToString()
+- getJwtParaToInt()
+- getJwtParaToLong()
+- getJwtParaToBigInteger()
+- getJwtParas()
 
 ## 注意事项
 
-在服务端通过 `setJwtAttr()` 方法设置 JWT 后，Http 的响应头会添加一个名称为 `Jwt` 的属性（可以通过 `jboot.web.jwt.httpHeaderName` 进行配置）。
+在服务端通过 `setJwtAttr()` 方法设置 JWT 后，Http 的响应头会添一个名称为 `Jwt` 的属性
+（可以通过 `jboot.web.jwt.httpHeaderName` 进行配置）。
 
-此时，客户端（浏览器、小程序、APP等）发现 Http 头有该属性后，需要客户端主动把该值存储起来。APP存储到数据库、浏览和小程序可以存储到localStorage等，当客户端进行 Http 请求的时候，需要在 Http 头添加下属性为 `Jwt`、值为之前存储数据 的请求头。
 
-当客户端正确添加 `Jwt` 的 Http 请求头的时候，服务端可以通过 `getJwtPara()` 方法获取到客户端传入的内容。
+此时，客户端（浏览器、小程序、APP等）发现 Http 头有该属性后，需要客户端主动把该值存储起来。
+APP存储到数据库、浏览和小程序可以存储到 `localStorage` 等。
+当客户端进行 Http 请求的时候，需要在 Http 头添加下属性为 `Jwt`、值为之前存储数据 的请求头。
+
+
+当客户端正确添加 `Jwt` 的 Http 请求头的时候，服务端可以通过 `getJwtPara()` 
+方法获取到客户端传入的内容。
+
 
 **注意：** 接收客户端传入的Jwt值是通过`getJwtPara()`方法，而不是 `getJwtAttr()`。

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ public @interface SeataGlobalTransactional {
      *
      * @return timeoutMills in MILLISECONDS.
      */
-    int timeoutMills() default TransactionInfo.DEFAULT_TIME_OUT;
+    int timeoutMills() default 60000;
 
     /**
      * Given name of the global transaction instance.

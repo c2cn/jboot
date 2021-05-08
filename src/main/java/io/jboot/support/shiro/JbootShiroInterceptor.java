@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,25 +15,18 @@
  */
 package io.jboot.support.shiro;
 
+import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
-import io.jboot.Jboot;
 import io.jboot.support.shiro.processer.AuthorizeResult;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
-import io.jboot.web.fixedinterceptor.FixedInvocation;
-
 /**
  * Shiro 拦截器
  */
-public class JbootShiroInterceptor implements FixedInterceptor {
+public class JbootShiroInterceptor implements Interceptor {
 
-    private static JbootShiroConfig config = Jboot.config(JbootShiroConfig.class);
+
 
     @Override
     public void intercept(Invocation inv) {
-        if (!config.isConfigOK()) {
-            inv.invoke();
-            return;
-        }
 
         JbootShiroManager.me().getInvokeListener().onInvokeBefore(inv);
         AuthorizeResult result = JbootShiroManager.me().invoke(inv.getActionKey());

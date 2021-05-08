@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.security.cert.X509Certificate;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -41,22 +38,34 @@ public class GatewayHttpProxy {
 
     private static final Log LOG = Log.getLog(GatewayHttpProxy.class);
 
-    private int readTimeOut;
-    private int connectTimeOut;
-    private int retries;
-    private String contentType;
+    private int readTimeOut = 10000; //10s
+    private int connectTimeOut = 5000; //5s
+    private int retries = 2;
+    private String contentType = JbootGatewayConfig.DEFAULT_PROXY_CONTENT_TYPE;
+
+
+    private boolean instanceFollowRedirects = false;
+    private boolean useCaches = false;
+
+    private Map<String, String> headers;
+
     private Exception exception;
+
+
+    public GatewayHttpProxy() {
+    }
+
 
     public GatewayHttpProxy(JbootGatewayConfig config) {
         this.readTimeOut = config.getProxyReadTimeout();
         this.connectTimeOut = config.getProxyConnectTimeout();
         this.retries = config.getProxyRetries();
         this.contentType = config.getProxyContentType();
-
     }
 
+
     public void sendRequest(String url, HttpServletRequest req, HttpServletResponse resp) {
-        int triesCount = retries < 0 ? 0 : retries;
+        int triesCount = Math.max(retries, 0);
         Exception exception = null;
 
         do {
@@ -75,7 +84,7 @@ public class GatewayHttpProxy {
     }
 
 
-    public void doSendRequest(String url, HttpServletRequest req, HttpServletResponse resp) throws Exception {
+    protected void doSendRequest(String url, HttpServletRequest req, HttpServletResponse resp) throws Exception {
 
         HttpURLConnection conn = null;
         try {
@@ -117,7 +126,7 @@ public class GatewayHttpProxy {
     }
 
 
-    private void copyRequestStreamToConnection(HttpServletRequest req, HttpURLConnection conn) throws IOException {
+    protected void copyRequestStreamToConnection(HttpServletRequest req, HttpURLConnection conn) throws IOException {
         OutputStream outStream = null;
         InputStream inStream = null;
         try {
@@ -134,7 +143,7 @@ public class GatewayHttpProxy {
     }
 
 
-    private void copyConnStreamToResponse(HttpURLConnection conn, HttpServletResponse resp) throws IOException {
+    protected void copyConnStreamToResponse(HttpURLConnection conn, HttpServletResponse resp) throws IOException {
         if (resp.isCommitted()) {
             return;
         }
@@ -145,17 +154,17 @@ public class GatewayHttpProxy {
             inStream = getInputStream(conn);
             outStream = resp.getOutputStream();
             byte[] buffer = new byte[1024];
-            for (int len = -1; (len = inStream.read(buffer)) != -1; ) {
+            for (int len; (len = inStream.read(buffer)) != -1; ) {
                 outStream.write(buffer, 0, len);
             }
-            outStream.flush();
+//            outStream.flush();
         } finally {
-            quetlyClose(inStream, outStream);
+            quetlyClose(inStream);
         }
     }
 
 
-    private static void quetlyClose(Closeable... closeables) {
+    protected static void quetlyClose(Closeable... closeables) {
         for (Closeable closeable : closeables) {
             if (closeable != null) {
                 try {
@@ -167,7 +176,11 @@ public class GatewayHttpProxy {
     }
 
 
-    private void configResponse(HttpServletResponse resp, HttpURLConnection conn) throws IOException {
+    protected void configResponse(HttpServletResponse resp, HttpURLConnection conn) throws IOException {
+
+        if (resp.isCommitted()) {
+            return;
+        }
 
         resp.setStatus(conn.getResponseCode());
 
@@ -199,7 +212,7 @@ public class GatewayHttpProxy {
         }
     }
 
-    private static InputStream getInputStream(HttpURLConnection conn) throws IOException {
+    protected InputStream getInputStream(HttpURLConnection conn) throws IOException {
         InputStream stream = conn.getResponseCode() >= 400
                 ? conn.getErrorStream()
                 : conn.getInputStream();
@@ -212,12 +225,12 @@ public class GatewayHttpProxy {
     }
 
 
-    private void configConnection(HttpURLConnection conn, HttpServletRequest req) throws ProtocolException {
+    protected void configConnection(HttpURLConnection conn, HttpServletRequest req) throws ProtocolException {
 
         conn.setReadTimeout(readTimeOut);
         conn.setConnectTimeout(connectTimeOut);
-        conn.setInstanceFollowRedirects(false);
-        conn.setUseCaches(false);
+        conn.setInstanceFollowRedirects(instanceFollowRedirects);
+        conn.setUseCaches(useCaches);
 
         conn.setRequestMethod(req.getMethod());
 
@@ -231,9 +244,15 @@ public class GatewayHttpProxy {
                 }
             }
         }
+
+        if (this.headers != null) {
+            for (Map.Entry<String, String> entry : this.headers.entrySet()) {
+                conn.setRequestProperty(entry.getKey(), entry.getValue());
+            }
+        }
     }
 
-    private static HttpURLConnection getConnection(String urlString) {
+    protected HttpURLConnection getConnection(String urlString) {
         try {
             if (urlString.toLowerCase().startsWith("https")) {
                 return getHttpsConnection(urlString);
@@ -245,27 +264,26 @@ public class GatewayHttpProxy {
         }
     }
 
-    private static HttpURLConnection getHttpConnection(String urlString) throws Exception {
+    protected HttpURLConnection getHttpConnection(String urlString) throws Exception {
         URL url = new URL(urlString);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        return conn;
+        return (HttpURLConnection) url.openConnection();
     }
 
-    private static HttpsURLConnection getHttpsConnection(String urlString) throws Exception {
+    protected HttpsURLConnection getHttpsConnection(String urlString) throws Exception {
+
+        SSLContext sslContext = SSLContext.getInstance("SSL", "SunJSSE");
+        TrustManager[] tm = {trustAnyTrustManager};
+        sslContext.init(null, tm, null);
+        SSLSocketFactory ssf = sslContext.getSocketFactory();
+
         URL url = new URL(urlString);
         HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
         conn.setHostnameVerifier(hnv);
-        SSLContext sslContext = SSLContext.getInstance("SSL", "SunJSSE");
-        if (sslContext != null) {
-            TrustManager[] tm = {trustAnyTrustManager};
-            sslContext.init(null, tm, null);
-            SSLSocketFactory ssf = sslContext.getSocketFactory();
-            conn.setSSLSocketFactory(ssf);
-        }
+        conn.setSSLSocketFactory(ssf);
         return conn;
     }
 
-    private static X509TrustManager trustAnyTrustManager = new X509TrustManager() {
+    protected static X509TrustManager trustAnyTrustManager = new X509TrustManager() {
         @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType) {
         }
@@ -280,11 +298,88 @@ public class GatewayHttpProxy {
         }
     };
 
-    private static HostnameVerifier hnv = (hostname, session) -> true;
+    protected static HostnameVerifier hnv = (hostname, session) -> true;
 
 
     public Exception getException() {
         return exception;
     }
+
+    public void setException(Exception exception) {
+        this.exception = exception;
+    }
+
+    public int getReadTimeOut() {
+        return readTimeOut;
+    }
+
+    public void setReadTimeOut(int readTimeOut) {
+        this.readTimeOut = readTimeOut;
+    }
+
+    public int getConnectTimeOut() {
+        return connectTimeOut;
+    }
+
+    public void setConnectTimeOut(int connectTimeOut) {
+        this.connectTimeOut = connectTimeOut;
+    }
+
+    public int getRetries() {
+        return retries;
+    }
+
+    public void setRetries(int retries) {
+        this.retries = retries;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
+    }
+
+    public boolean isInstanceFollowRedirects() {
+        return instanceFollowRedirects;
+    }
+
+    public void setInstanceFollowRedirects(boolean instanceFollowRedirects) {
+        this.instanceFollowRedirects = instanceFollowRedirects;
+    }
+
+    public boolean isUseCaches() {
+        return useCaches;
+    }
+
+    public void setUseCaches(boolean useCaches) {
+        this.useCaches = useCaches;
+    }
+
+    public Map<String, String> getHeaders() {
+        return headers;
+    }
+
+    public void setHeaders(Map<String, String> headers) {
+        this.headers = headers;
+    }
+
+    public GatewayHttpProxy addHeader(String key, String value) {
+        if (this.headers == null) {
+            this.headers = new HashMap<>();
+        }
+        this.headers.put(key, value);
+        return this;
+    }
+
+    public GatewayHttpProxy addHeaders(Map<String, String> headers) {
+        if (this.headers == null) {
+            this.headers = new HashMap<>();
+        }
+        this.headers.putAll(headers);
+        return this;
+    }
+
 
 }

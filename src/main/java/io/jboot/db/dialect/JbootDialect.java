@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,19 +24,19 @@ import java.util.List;
 public interface JbootDialect {
 
 
-    public String forFindByColumns(List<Join> joins, String table, String loadColumns, List<Column> columns, String orderBy, Object limit);
+    public String forFindByColumns(String alias, List<Join> joins, String table, String loadColumns, List<Column> columns, String orderBy, Object limit);
 
 
-    public String forFindCountByColumns(List<Join> joins, String table, List<Column> columns);
+    public String forFindCountByColumns(String alias, List<Join> joins, String table, List<Column> columns);
 
 
-    public String forDeleteByColumns(List<Join> joins, String table, List<Column> columns);
+    public String forDeleteByColumns(String alias, List<Join> joins, String table, List<Column> columns);
 
 
     public String forPaginateSelect(String loadColumns);
 
 
-    public String forPaginateFrom(List<Join> joins, String table, List<Column> columns, String orderBy);
+    public String forPaginateFrom(String alias, List<Join> joins, String table, List<Column> columns, String orderBy);
 
 
 }

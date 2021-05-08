@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ public class JbootCacheConfig {
     public static final String TYPE_NONE = "none";
 
 
-    private String type = TYPE_EHCACHE;
+    private String type = TYPE_CAFFEINE;
 
     // AOP 缓存的默认有效时间，0为永久有效，单位秒，
     // 当 @Cacheable 和 @CachePut 注解不配置的时候默认用这个配置

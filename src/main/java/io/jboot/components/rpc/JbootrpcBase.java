@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class JbootrpcBase implements Jbootrpc {
 
-    protected static final Map<String, Object> objectCache = new ConcurrentHashMap<>();
+    protected static final Map<JbootrpcReferenceConfig, Object> objectCache = new ConcurrentHashMap<>();
     protected static JbootrpcConfig rpcConfig = Jboot.config(JbootrpcConfig.class);
     private boolean started = false;
 
@@ -31,20 +31,20 @@ public abstract class JbootrpcBase implements Jbootrpc {
     @Override
     public <T> T serviceObtain(Class<T> interfaceClass, JbootrpcReferenceConfig config) {
 
-        String key = buildCacheKey(interfaceClass, config);
-        T object = (T) objectCache.get(key);
+        T object = (T) objectCache.get(config);
         if (object == null) {
             synchronized (this) {
-                if (objectCache.get(key) == null) {
+                object = (T) objectCache.get(config);
+                if (object == null) {
 
                     // onStart 方法是在 app 启动完成后，Jboot 主动去调用的
                     // 但是，在某些场景可能存在没有等 app 启动完成就去获取 Service 的情况
                     // 此时，需要主动先调用下 onStart 方法
-                    callStartMethodIfNecessary();
+                    invokeOnStartIfNecessary();
 
                     object = onServiceCreate(interfaceClass, config);
                     if (object != null) {
-                        objectCache.put(key, object);
+                        objectCache.put(config, object);
                     }
                 }
             }
@@ -52,34 +52,29 @@ public abstract class JbootrpcBase implements Jbootrpc {
         return object;
     }
 
-    protected void callStartMethodIfNecessary() {
+    protected synchronized void invokeOnStartIfNecessary() {
         if (!started) {
             synchronized (this) {
                 if (!started) {
                     onStart();
+                    setStarted(true);
                 }
             }
         }
     }
 
+
     public abstract <T> T onServiceCreate(Class<T> serviceClass, JbootrpcReferenceConfig config);
 
     @Override
     public void onStart() {
-        setStarted(true);
+
     }
 
 
     @Override
     public void onStop() {
 
-    }
-
-    protected String buildCacheKey(Class interfaceClass, JbootrpcReferenceConfig config) {
-        StringBuilder sb = new StringBuilder(interfaceClass.getName());
-        return sb.append(":").append(config.getGroup())
-                .append(":").append(config.getVersion())
-                .toString();
     }
 
     public boolean isStarted() {

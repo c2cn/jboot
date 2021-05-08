@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package io.jboot.components.rpc.dubbo;
 
 
+import io.jboot.Jboot;
 import io.jboot.app.config.JbootConfigManager;
 import io.jboot.app.config.JbootConfigUtil;
 import io.jboot.components.rpc.JbootrpcReferenceConfig;
@@ -122,13 +123,36 @@ class DubboUtil {
 
         //方法配置 配置
         Map<String, MethodConfig> methodConfigs = configs(MethodConfig.class, "jboot.rpc.dubbo.method");
+        for (MethodConfig methodConfig : methodConfigs.values()) {
+            Object onreturn = methodConfig.getOnreturn();
+            if (onreturn instanceof String && ((String) onreturn).contains(".")) {
+                String[] objectAndMethod = ((String) onreturn).split("\\.");
+                methodConfig.setOnreturn(Jboot.getBean(objectAndMethod[0]));
+                methodConfig.setOnreturnMethod(objectAndMethod[1]);
+            }
+
+            Object oninvoke = methodConfig.getOninvoke();
+            if (oninvoke instanceof String && ((String) oninvoke).contains(".")) {
+                String[] objectAndMethod = ((String) oninvoke).split("\\.");
+                methodConfig.setOninvoke(Jboot.getBean(objectAndMethod[0]));
+                methodConfig.setOninvokeMethod(objectAndMethod[1]);
+            }
+
+            Object onthrow = methodConfig.getOnthrow();
+            if (onthrow instanceof String && ((String) onthrow).contains(".")) {
+                String[] objectAndMethod = ((String) onthrow).split("\\.");
+                methodConfig.setOnthrow(Jboot.getBean(objectAndMethod[0]));
+                methodConfig.setOnthrowMethod(objectAndMethod[1]);
+            }
+        }
+
         RPCUtil.setChildConfig(methodConfigs, argumentConfigs, "jboot.rpc.dubbo.method", "argument");
 
 
         //消费者 配置
         Map<String, ConsumerConfig> consumerConfigs = configs(ConsumerConfig.class, "jboot.rpc.dubbo.consumer");
         RPCUtil.setChildConfig(consumerConfigs, methodConfigs, "jboot.rpc.dubbo.consumer", "method");
-        RPCUtil.setChildConfig(consumerConfigs, protocolConfigs, "jboot.rpc.dubbo.consumer", "protocol");
+//        RPCUtil.setChildConfig(consumerConfigs, protocolConfigs, "jboot.rpc.dubbo.consumer", "protocol");
         RPCUtil.setChildConfig(consumerConfigs, registryConfigs, "jboot.rpc.dubbo.consumer", "registry");
 
 
@@ -152,7 +176,7 @@ class DubboUtil {
 
     public static ReferenceConfig toReferenceConfig(JbootrpcReferenceConfig jbootReferenceConfig) {
         ReferenceConfig referenceConfig = new ReferenceConfig();
-        RPCUtil.copyFields(jbootReferenceConfig, referenceConfig);
+        RPCUtil.copyDeclaredFields(jbootReferenceConfig, referenceConfig);
 
         // reference consumer
         if (jbootReferenceConfig.getConsumer() != null) {
@@ -187,7 +211,7 @@ class DubboUtil {
 
     public static ServiceConfig toServiceConfig(JbootrpcServiceConfig jbootServiceConfig) {
         ServiceConfig serviceConfig = new ServiceConfig();
-        RPCUtil.copyFields(jbootServiceConfig, serviceConfig);
+        RPCUtil.copyDeclaredFields(jbootServiceConfig, serviceConfig);
 
         // service provider
         if (StrUtil.isNotBlank(jbootServiceConfig.getProvider())) {
@@ -247,7 +271,24 @@ class DubboUtil {
 
 
     private static <T> Map<String, T> configs(Class<T> clazz, String prefix) {
-        return JbootConfigUtil.getConfigModels(clazz, prefix);
+        Map<String, T> ret = JbootConfigUtil.getConfigModels(clazz, prefix);
+
+        if (ret.size() > 0 && !RPCUtil.isDefaultConfigExist(clazz, ret)) {
+            for (Map.Entry<String, T> entry : ret.entrySet()) {
+                if ("default".equals(entry.getKey())) {
+                    if (entry.getValue() instanceof ProviderConfig) {
+                        ((ProviderConfig) entry.getValue()).setDefault(true);
+                    } else if (entry.getValue() instanceof ConsumerConfig) {
+                        ((ConsumerConfig) entry.getValue()).setDefault(true);
+                    } else if (entry.getValue() instanceof ProtocolConfig) {
+                        ((ProtocolConfig) entry.getValue()).setDefault(true);
+                    } else if (entry.getValue() instanceof RegistryConfig) {
+                        ((RegistryConfig) entry.getValue()).setDefault(true);
+                    }
+                }
+            }
+        }
+        return ret;
     }
 
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package io.jboot.components.cache.interceptor;
 
-import com.jfinal.log.Log;
 import com.jfinal.template.Engine;
 import io.jboot.Jboot;
 import io.jboot.components.cache.AopCache;
@@ -36,8 +35,6 @@ import java.util.Map;
 
 class Utils {
 
-
-    static final Log LOG = Log.getLog(Utils.class);
     static final Engine ENGINE = new Engine("JbootCacheRender");
 
     /**
@@ -72,7 +69,7 @@ class Utils {
         }
 
         StringBuilder keyBuilder = new StringBuilder(clazz.getName());
-        keyBuilder.append("#").append(method.getName());
+        keyBuilder.append('#').append(method.getName());
 
         if (ArrayUtil.isNullOrEmpty(arguments)) {
             return keyBuilder.toString();
@@ -81,29 +78,33 @@ class Utils {
         Class[] paramTypes = method.getParameterTypes();
         int index = 0;
         for (Object argument : arguments) {
-            String argStr = converteToString(argument);
-            ensureArgumentNotNull(argStr, clazz, method);
-            keyBuilder
-                    .append(paramTypes[index++].getClass().getName())
-                    .append(":")
-                    .append(argStr)
-                    .append("-");
+            String argString = converteToString(argument);
+            ensureArgumentNotNull(argString, method);
+
+            if (index > 0){
+                keyBuilder.append('-');
+            }
+            keyBuilder.append(paramTypes[index++].getClass().getName())
+                    .append(':')
+                    .append(argString);
         }
 
-        //remove last chat '-'
-        return keyBuilder.deleteCharAt(keyBuilder.length() - 1).toString();
-
+        return keyBuilder.toString();
     }
 
     private static String renderKey(String key, Method method, Object[] arguments) {
-        if (!key.contains("#(") || !key.contains(")")) {
-            return key;
+        int indexOfStartFlag  = key.indexOf("#(");
+        if (indexOfStartFlag > -1){
+            int indexOfEndFlag = key.indexOf(")");
+            if (indexOfEndFlag > indexOfStartFlag){
+                return engineRender(key,method,arguments);
+            }
         }
 
-        return engineRender(key, method, arguments);
+        return key;
     }
 
-    public static void ensureArgumentNotNull(String argument, Class clazz, Method method) {
+    public static void ensureArgumentNotNull(String argument, Method method) {
         if (argument == null) {
             throw new JbootException("not support empty key for annotation @Cacheable, @CacheEvict or @CachePut " +
                     "at method[" + ClassUtil.buildMethodString(method) + "], " +
@@ -111,7 +112,7 @@ class Utils {
         }
     }
 
-    public static void ensureCachenameAvailable(Method method, Class targetClass, String cacheName) {
+    public static void ensureCachenameAvailable(Method method, String cacheName) {
         if (StrUtil.isBlank(cacheName)) {
             throw new JbootException(String.format("CacheEvict.name() must not empty in method [%s].",
                     ClassUtil.buildMethodString(method)));
@@ -167,7 +168,7 @@ class Utils {
                 .append(")")
                 .toString();
 
-        return "true".equals(engineRender(template,method, arguments));
+        return "true".equals(engineRender(template, method, arguments));
     }
 
 
@@ -195,10 +196,8 @@ class Utils {
 
     private static final JbootCacheConfig CONFIG = Jboot.config(JbootCacheConfig.class);
 
-    static void putDataToCache(int liveSeconds, String cacheName, String cacheKey, Object data) {
-         liveSeconds = liveSeconds > 0
-                ? liveSeconds
-                : CONFIG.getAopCacheLiveSeconds();
+    static void putDataToCache(String cacheName, String cacheKey, Object data, int liveSeconds) {
+        liveSeconds = liveSeconds > 0 ? liveSeconds : CONFIG.getAopCacheLiveSeconds();
         if (liveSeconds > 0) {
             AopCache.put(cacheName, cacheKey, data, liveSeconds);
         } else {

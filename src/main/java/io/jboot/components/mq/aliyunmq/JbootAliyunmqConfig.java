@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ public class JbootAliyunmqConfig {
     private String producerId;
     private String addr;
     private String sendMsgTimeoutMillis = "3000";
+
+    private String broadcastChannelPrefix = "broadcast-";
 
     public String getAccessKey() {
         return accessKey;
@@ -67,4 +69,11 @@ public class JbootAliyunmqConfig {
         this.sendMsgTimeoutMillis = sendMsgTimeoutMillis;
     }
 
+    public String getBroadcastChannelPrefix() {
+        return broadcastChannelPrefix;
+    }
+
+    public void setBroadcastChannelPrefix(String broadcastChannelPrefix) {
+        this.broadcastChannelPrefix = broadcastChannelPrefix;
+    }
 }

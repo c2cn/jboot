@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ public class JbootUndertowConfig extends UndertowConfig {
         //当不配置端口号时，默认为 8080
         if (port == null || port.trim().length() == 0) {
             propExt.getProperties().put(UNDERTOW_PORT, "8080");
-            JbootConfigManager.me().setBootArg(UNDERTOW_PORT, "8080");
+            JbootConfigManager.setBootArg(UNDERTOW_PORT, "8080");
         }
 
         //当配置为 -1 或者 * 时，默认为随机端口号
@@ -66,7 +66,7 @@ public class JbootUndertowConfig extends UndertowConfig {
             Integer availablePort = getAvailablePort();
             if (availablePort != null) {
                 propExt.getProperties().put(UNDERTOW_PORT, availablePort.toString());
-                JbootConfigManager.me().setBootArg(UNDERTOW_PORT, availablePort.toString());
+                JbootConfigManager.setBootArg(UNDERTOW_PORT, availablePort.toString());
             }
         }
 
@@ -76,11 +76,16 @@ public class JbootUndertowConfig extends UndertowConfig {
             propExt.getProperties().put(DEV_MODE, JbootConfigManager.me().isDevMode());
         }
 
-        //当不配置 host 时，默认为 0.0.0.0
+        //当不配置 host 时，为其配置默认的 host
         String host = propExt.get(UNDERTOW_HOST);
         if (host == null || host.trim().length() == 0) {
-            propExt.getProperties().put(UNDERTOW_HOST, "0.0.0.0");
-            JbootConfigManager.me().setBootArg(UNDERTOW_HOST, "0.0.0.0");
+            if (isAppDevMode()) {
+                propExt.getProperties().put(UNDERTOW_HOST, "localhost");
+                JbootConfigManager.setBootArg(UNDERTOW_HOST, "localhost");
+            } else {
+                propExt.getProperties().put(UNDERTOW_HOST, "0.0.0.0");
+                JbootConfigManager.setBootArg(UNDERTOW_HOST, "0.0.0.0");
+            }
         }
 
         //当不配置资源路径时，默认为 classpath 下的 webapp
@@ -97,7 +102,7 @@ public class JbootUndertowConfig extends UndertowConfig {
      *
      * @return
      */
-    public static Integer getAvailablePort() {
+    private static Integer getAvailablePort() {
         ServerSocket serverSocket = null;
         try {
             serverSocket = new ServerSocket(0);
@@ -113,6 +118,13 @@ public class JbootUndertowConfig extends UndertowConfig {
         }
         return null;
     }
+
+
+    private static boolean isAppDevMode() {
+        String appMode = JbootConfigManager.me().getConfigValue("jboot.app.mode");
+        return (null == appMode || "".equals(appMode.trim()) || "dev".equalsIgnoreCase(appMode.trim()));
+    }
+
 
     @Override
     public HotSwapResolver getHotSwapResolver() {

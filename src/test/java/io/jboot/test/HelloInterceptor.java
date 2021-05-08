@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,18 @@ package io.jboot.test;
 import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
 
+import javax.annotation.PostConstruct;
+
 /**
  * @author michael yang (fuhai999@gmail.com)
  * @Date: 2019/12/12
  */
 public class HelloInterceptor implements Interceptor {
+
+    @PostConstruct
+    public void aaa(){
+        System.out.println("HelloInterceptor --->>> aaaa() invoked!");
+    }
 
     @Override
     public void intercept(Invocation inv) {

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package io.jboot.objects.counter;
 import io.jboot.Jboot;
 import io.jboot.core.spi.JbootSpiLoader;
 import io.jboot.objects.counter.impl.JbootLocalCounter;
-import io.jboot.objects.counter.impl.JbootRedicCounter;
+import io.jboot.objects.counter.impl.JbootRedisCounter;
 
 /**
  * @author michael yang (fuhai999@gmail.com)
@@ -37,9 +37,9 @@ public class JbootCounterManager {
     public JbootCounter create(String name){
         switch (config.getType()){
             case JbootCounterConfig.TYPE_LOCAL:
-                return new JbootLocalCounter();
+                return new JbootLocalCounter(name);
             case JbootCounterConfig.TYPE_REDIS:
-                return new JbootRedicCounter(name);
+                return new JbootRedisCounter(name);
             default:
                 return JbootSpiLoader.load(JbootCounter.class,config.getType());
         }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,52 @@ public class StrUtil extends StrKit {
         return redirect;
     }
 
+    private static final Map<String, String> EMPTY_MAP = new HashMap<>();
+
+    public static Map<String, String> queryStringToMap(String queryString) {
+        if (StrUtil.isBlank(queryString)) {
+            return EMPTY_MAP;
+        }
+
+        Map<String, String> map = new HashMap<>();
+        String[] params = queryString.split("&");
+        for (String paramPair : params) {
+            String[] keyAndValue = paramPair.split("=");
+            if (keyAndValue.length == 2) {
+                map.put(keyAndValue[0], keyAndValue[1]);
+            } else if (keyAndValue.length == 1) {
+                map.put(keyAndValue[0], "");
+            }
+        }
+        return map;
+    }
+
+
+    public static String mapToQueryString(Map map) {
+        if (map == null || map.isEmpty()) {
+            return EMPTY;
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        for (Object key : map.keySet()) {
+            if (key == null || key.equals(StrUtil.EMPTY)) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append("&");
+            }
+
+            sb.append(key.toString().trim());
+            sb.append("=");
+            Object value = map.get(key);
+            sb.append(value == null ? EMPTY : StrUtil.urlEncode(value.toString().trim()));
+        }
+
+
+        return sb.toString();
+    }
+
     public static boolean areNotEmpty(String... strs) {
         if (strs == null || strs.length == 0) {
             return false;
@@ -75,6 +121,19 @@ public class StrUtil extends StrKit {
             }
         }
         return true;
+    }
+
+    public static boolean isAnyBlank(String... strs) {
+        if (strs == null || strs.length == 0) {
+            return false;
+        }
+
+        for (String str : strs) {
+            if (isBlank(str)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static String requireNonBlank(String str) {
@@ -91,8 +150,14 @@ public class StrUtil extends StrKit {
         return str;
     }
 
-    public static String obtainDefaultIfBlank(String str, String defaultValue) {
-        return isBlank(str) ? defaultValue : str;
+    @Deprecated
+    public static String obtainDefaultIfBlank(String value, String defaultValue) {
+        return obtainDefault(value, defaultValue);
+    }
+
+
+    public static String obtainDefault(String value, String defaultValue) {
+        return isBlank(value) ? defaultValue : value;
     }
 
     /**
@@ -102,7 +167,7 @@ public class StrUtil extends StrKit {
      * @return
      */
     public static boolean isNotEmpty(String str) {
-        return str != null && !str.equals("");
+        return str != null && !str.equals(EMPTY);
     }
 
 
@@ -113,7 +178,7 @@ public class StrUtil extends StrKit {
      * @return
      */
     public static boolean isNotBlank(Object str) {
-        return str == null ? false : notBlank(str.toString());
+        return str != null && notBlank(str.toString());
     }
 
 

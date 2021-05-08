@@ -1,6 +1,8 @@
-# 如何在Jboot中添加自己的 JFianlConfig
+# 如何在Jboot中添加自己的 JFinalConfig
 
-凡是开发过 JFinal 的同学，都知道 JFinalConfig 是 JFinal 的核心配置，详情： https://www.jfinal.com/doc/2-1 ，其内容如下：
+[[toc]]
+
+JFinalConfig 是 JFinal 的核心配置，详情： https://www.jfinal.com/doc/2-1 ，其内容如下：
 
 ```java
 public class DemoConfig extends JFinalConfig {
@@ -14,7 +16,7 @@ public class DemoConfig extends JFinalConfig {
 ```
 
 默认情况下，我们不需要对 JFinal 进行任何的配置，因为 Jboot 已经对 JFinal 进行了默认的配置，同时，Controller 等的配置完全是通过注解
-@RequestMapping 来配置了，数据库也只是在 jboot.properties 里添加就可以。
+`@RequestMapping` 来配置了，数据库也只是在 jboot.properties 里添加就可以。
 
 
 但是可能在某些特殊情况下，我们对 JFinal 进行自己特殊的配置，如何来做呢？
@@ -57,12 +59,6 @@ public class JbootAppListenerBase implements JbootAppListener {
     @Override
     public void onInterceptorConfig(Interceptors interceptors) {
         //对应 JFinalConfig 的 configInterceptor
-    }
-
-    @Override
-    public void onFixedInterceptorConfig(FixedInterceptors fixedInterceptors) {
-        //FixedInterceptor 类似 Interceptor，
-        // 但是 FixedInterceptor 不会被注解 @Clear 清除
     }
 
     @Override

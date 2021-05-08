@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ public interface JbootRedis {
 
     /**
      * 当且仅当 key 不存在能成功设置
+     *
      * @param key
      * @param value 设置成功，返回 1，设置失败，返回 0
      * @return
@@ -628,6 +629,15 @@ public interface JbootRedis {
      * @param channels
      */
     public void subscribe(BinaryJedisPubSub binaryListener, final byte[]... channels);
+
+    /**
+     * 扫描
+     *
+     * @param pattern
+     * @param scanCount
+     * @return
+     */
+    public RedisScanResult<String> scan(String pattern, String cursor, int scanCount);
 
 
     public byte[] keyToBytes(Object key);

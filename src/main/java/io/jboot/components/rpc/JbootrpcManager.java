@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import io.jboot.exception.JbootException;
 import io.jboot.exception.JbootRpcException;
 import io.jboot.utils.ArrayUtil;
 import io.jboot.utils.ClassScanner;
+import io.jboot.utils.ClassUtil;
 
 import java.io.Serializable;
 import java.util.List;
@@ -55,7 +56,7 @@ public class JbootrpcManager {
     }
 
 
-    private static Class[] default_excludes = new Class[]{
+    private static Class<?>[] default_excludes = new Class[]{
             JbootEventListener.class,
             JbootmqMessageListener.class,
             Serializable.class
@@ -89,18 +90,18 @@ public class JbootrpcManager {
             return;
         }
 
-        for (Class clazz : classes) {
-            RPCBean rpcBean = (RPCBean) clazz.getAnnotation(RPCBean.class);
-            Class[] inters = clazz.getInterfaces();
-            if (inters == null || inters.length == 0) {
-                throw new JbootException(String.format("class[%s] has no interface, can not use @RPCBean", clazz));
+        for (Class<?> clazz : classes) {
+            RPCBean rpcBean = clazz.getAnnotation(RPCBean.class);
+            Class<?>[] inters = clazz.getInterfaces();
+            if (inters.length == 0) {
+                throw new JbootException("@RPCBean can not use for class \""+ ClassUtil.getUsefulClass(clazz).getName() +"\", because it has no interface.");
             }
 
             //对某些系统的类 进行排除，例如：Serializable 等
-            Class[] excludes = ArrayUtil.concat(default_excludes, rpcBean.exclude());
-            for (Class inter : inters) {
+            Class<?>[] excludes = ArrayUtil.concat(default_excludes, rpcBean.exclude());
+            for (Class<?> inter : inters) {
                 boolean isContinue = false;
-                for (Class ex : excludes) {
+                for (Class<?> ex : excludes) {
                     if (ex.isAssignableFrom(inter)) {
                         isContinue = true;
                         break;
@@ -120,12 +121,12 @@ public class JbootrpcManager {
     public Jbootrpc createJbootrpc(String type) {
 
         switch (type) {
+            case JbootrpcConfig.TYPE_DUBBO:
+                return new JbootDubborpc();
             case JbootrpcConfig.TYPE_MOTAN:
                 return new JbootMotanrpc();
             case JbootrpcConfig.TYPE_LOCAL:
                 return new JbootLocalrpc();
-            case JbootrpcConfig.TYPE_DUBBO:
-                return new JbootDubborpc();
             default:
                 return JbootSpiLoader.load(Jbootrpc.class, type);
         }

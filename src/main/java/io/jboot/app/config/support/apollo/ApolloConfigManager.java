@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,15 @@ package io.jboot.app.config.support.apollo;
 
 import com.ctrip.framework.apollo.Config;
 import com.ctrip.framework.apollo.ConfigService;
+import com.ctrip.framework.apollo.enums.PropertyChangeType;
 import com.ctrip.framework.apollo.model.ConfigChange;
-import io.jboot.Jboot;
+import io.jboot.app.config.ConfigUtil;
 import io.jboot.app.config.JbootConfigManager;
-import io.jboot.utils.StrUtil;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+
 
 /**
  * @author michael yang (fuhai999@gmail.com)
@@ -43,30 +46,42 @@ public class ApolloConfigManager {
             return;
         }
 
-        Config config = getDefaultConfig();
+        //apollo 配置
+        System.setProperty("app.id", apolloServerConfig.getAppId());
+        System.setProperty("apollo.meta", apolloServerConfig.getMeta());
+
+
+        Config config = getDefaultConfig(configManager);
 
         Set<String> propNames = config.getPropertyNames();
         if (propNames != null && !propNames.isEmpty()) {
+            Map properties = new HashMap();
             for (String name : propNames) {
                 String value = config.getProperty(name, null);
-                configManager.setRemoteProperty(name, value);
+                properties.put(name,value);
             }
+            configManager.setRemoteProperties(properties);
+
         }
 
         config.addChangeListener(changeEvent -> {
             for (String key : changeEvent.changedKeys()) {
                 ConfigChange change = changeEvent.getChange(key);
-                configManager.setRemoteProperty(change.getPropertyName(), change.getNewValue());
-
+                if (change.getChangeType() == PropertyChangeType.DELETED) {
+                    configManager.removeRemoteProperty(change.getPropertyName());
+                } else {
+                    configManager.setRemoteProperty(change.getPropertyName(), change.getNewValue());
+                }
                 configManager.notifyChangeListeners(change.getPropertyName(), change.getNewValue(), change.getOldValue());
             }
         });
 
+
     }
 
-    private Config getDefaultConfig() {
-        ApolloServerConfig apolloServerConfig = Jboot.config(ApolloServerConfig.class);
-        if (StrUtil.isNotBlank(apolloServerConfig.getDefaultNamespace())) {
+    private Config getDefaultConfig(JbootConfigManager configManager) {
+        ApolloServerConfig apolloServerConfig = configManager.get(ApolloServerConfig.class);
+        if (ConfigUtil.isNotBlank(apolloServerConfig.getDefaultNamespace())) {
             return ConfigService.getConfig(apolloServerConfig.getDefaultNamespace());
         } else {
             return ConfigService.getAppConfig();

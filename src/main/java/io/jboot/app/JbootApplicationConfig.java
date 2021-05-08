@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package io.jboot.app;
 
 import io.jboot.JbootConsts;
+import io.jboot.app.config.JbootConfigManager;
 import io.jboot.app.config.annotation.ConfigModel;
 
 @ConfigModel(prefix = "jboot.app")
@@ -67,6 +68,15 @@ public class JbootApplicationConfig {
 
     public void setJfinalConfig(String jfinalConfig) {
         this.jfinalConfig = jfinalConfig;
+    }
+
+
+    private static JbootApplicationConfig instance;
+    public static JbootApplicationConfig get() {
+        if (instance == null) {
+            instance = JbootConfigManager.me().get(JbootApplicationConfig.class);
+        }
+        return instance;
     }
 
     @Override

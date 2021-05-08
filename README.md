@@ -8,7 +8,7 @@
 <dependency>
     <groupId>io.jboot</groupId>
     <artifactId>jboot</artifactId>
-    <version>3.3.6</version>
+    <version>3.9.11</version>
 </dependency>
 ```
 
@@ -68,5 +68,5 @@ public class HelloworldController extends JbootController {
 
 ## 微信交流群
 
-![](./doc/docs/imgs/jboot-wechat-group.png)
+![](./doc/docs/static/images/jboot-wechat-group.png)
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ public class JbootResourceLoader {
     private List<FileScanner> scanners = new ArrayList<>();
 
     public JbootResourceLoader() {
-        String configResourcePathName = JbootConfigManager.me().getConfigValue("jboot.app.resourcePathName");
-        this.resourcePathName = StrUtil.obtainDefaultIfBlank(configResourcePathName, "webapp");
+        String pathName = JbootConfigManager.me().getConfigValue("jboot.app.resourcePathName");
+        this.resourcePathName = StrUtil.obtainDefault(pathName, "webapp");
     }
 
     public JbootResourceLoader(String resourcePathName) {
@@ -46,7 +46,7 @@ public class JbootResourceLoader {
         try {
 
             URL url = JbootResourceLoader.class.getClassLoader().getResource("");
-            if (url == null) {
+            if (url == null || url.toString().endsWith(".jar!/")) {
                 return;
             }
 

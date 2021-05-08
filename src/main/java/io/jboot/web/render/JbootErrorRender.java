@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2016, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,16 @@
  */
 package io.jboot.web.render;
 
+import com.jfinal.kit.JsonKit;
+import com.jfinal.kit.Ret;
 import com.jfinal.render.Render;
 import com.jfinal.render.RenderException;
 import com.jfinal.render.RenderManager;
 import io.jboot.exception.JbootExceptionHolder;
+import io.jboot.utils.RequestUtil;
+import io.jboot.utils.StrUtil;
+import io.jboot.components.valid.ValidException;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 
@@ -29,7 +33,8 @@ import java.util.List;
  */
 public class JbootErrorRender extends Render {
 
-    protected static final String contentType = "text/html; charset=" + getEncoding();
+    protected static final String htmlContentType = "text/html;charset=" + getEncoding();
+    protected static final String jsonContentType = "application/json;charset=" + getEncoding();
 
     protected static final String poweredBy = "<center><a href='http://jboot.io' target='_blank'><b>Powered by Jboot</b></a></center>";
 
@@ -40,10 +45,45 @@ public class JbootErrorRender extends Render {
     protected static final String html500_header = "<html><head><title>500 Internal Server Error</title></head>" +
             "<body bgcolor='white'><center><h1>500 Internal Server Error</h1></center>" +
             "<hr>";
+    protected static final String html400_header = "<html><head><title>400 Internal Server Error</title></head>" +
+            "<body bgcolor='white'><center><h1>400 Internal Server Error</h1></center>" +
+            "<hr>";
 
     protected static final String html500_footer = "<hr>" + poweredBy + "</body></html>";
 
+
+    protected static final String json401 = JsonKit.toJson(Ret.fail().set("errorCode", 401).set("message", "401 Unauthorized"));
+    protected static final String json403 = JsonKit.toJson(Ret.fail().set("errorCode", 403).set("message", "403 Forbidden"));
+    protected static final String json404 = JsonKit.toJson(Ret.fail().set("errorCode", 404).set("message", "404 Not Found"));
+
+
     protected int errorCode;
+    protected String message;
+    protected Throwable throwable;
+
+    public int getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(int errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public Throwable getThrowable() {
+        return throwable;
+    }
+
+    public void setThrowable(Throwable throwable) {
+        this.throwable = throwable;
+    }
 
     public JbootErrorRender(int errorCode, String view) {
         this.errorCode = errorCode;
@@ -65,38 +105,38 @@ public class JbootErrorRender extends Render {
         }
 
         try {
-            response.setContentType(contentType);
+            boolean needRenderJson = RequestUtil.isJsonContentType(request) || RequestUtil.isAjaxRequest(request);
+            response.setContentType(needRenderJson ? jsonContentType : htmlContentType);
             PrintWriter writer = response.getWriter();
-            writer.write(getErrorHtml());
-        } catch (IOException e) {
-            throw new RenderException(e);
+            writer.write(needRenderJson ? getErrorJson() : getErrorHtml());
+        } catch (Exception ex) {
+            throw new RenderException(ex);
         }
+
     }
+
 
     public String getErrorHtml() {
         int errorCode = getErrorCode();
-        if (errorCode == 404) {
+        if (throwable instanceof ValidException) {
+            return buildErrorInfo(html400_header);
+        } else if (errorCode == 404) {
             return html404;
-        }
-        if (errorCode == 401) {
+        } else if (errorCode == 401) {
             return html401;
-        }
-        if (errorCode == 403) {
+        } else if (errorCode == 403) {
             return html403;
-        }
-        if (errorCode == 500) {
-            return build500ErrorInfo();
+        } else if (errorCode == 400) {
+            return buildErrorInfo(html400_header);
+        } else if (errorCode == 500) {
+            return buildErrorInfo(html500_header);
         }
         return "<html><head><title>" + errorCode + " Error</title></head><body bgcolor='white'><center><h1>" + errorCode + " Error</h1></center><hr>" + poweredBy + "</body></html>";
     }
 
-    public int getErrorCode() {
-        return errorCode;
-    }
 
-
-    public String build500ErrorInfo() {
-        StringBuilder stringBuilder = new StringBuilder(html500_header);
+    public String buildErrorInfo(String headerHtml) {
+        StringBuilder stringBuilder = new StringBuilder(headerHtml);
 
         List<String> messages = JbootExceptionHolder.getMessages();
         for (String message : messages) {
@@ -115,6 +155,57 @@ public class JbootErrorRender extends Render {
         }
 
         return stringBuilder.append(html500_footer).toString();
+    }
+
+
+    public String getErrorJson() {
+        int errorCode = getErrorCode();
+        if (throwable instanceof ValidException || errorCode == 500 || errorCode == 400) {
+            return buildErrorJson();
+        } else if (errorCode == 404) {
+            return json404;
+        } else if (errorCode == 401) {
+            return json401;
+        } else if (errorCode == 403) {
+            return json403;
+        }
+        return JsonKit.toJson(Ret.fail().set("errorCode", errorCode).set("message", errorCode + " Error"));
+    }
+
+
+    public String buildErrorJson() {
+
+        Ret ret = Ret.fail().set("errorCode", getErrorCode()).set("message", getErrorCode() + " Internal Server Error");
+
+        StringBuilder errorMsgBuilder = new StringBuilder();
+        List<String> messages = JbootExceptionHolder.getMessages();
+        for (String message : messages) {
+            errorMsgBuilder.append(message);
+        }
+
+        ret.set("errorMessage", errorMsgBuilder.toString());
+
+        List<Throwable> throwables = JbootExceptionHolder.getThrowables();
+        if (throwables.size() > 0) {
+            Throwable throwable = throwables.get(0);
+            ret.set("throwable", throwable.getClass().getName() + ": " + throwable.getMessage());
+            ret.set("message", throwable.getMessage());
+        }
+
+        if (this.throwable != null) {
+            ret.set("throwable", this.throwable.getClass().getName() + ": " + this.throwable.getMessage());
+            ret.set("message", throwable.getMessage());
+
+            if (throwable instanceof ValidException) {
+                ret.set("errorMessage", ((ValidException) throwable).getReason());
+            }
+        }
+
+        if (StrUtil.isNotBlank(this.message)) {
+            ret.set("message", this.message);
+        }
+
+        return JsonKit.toJson(ret);
     }
 }
 

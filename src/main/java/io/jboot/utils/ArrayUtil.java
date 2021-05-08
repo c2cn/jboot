@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package io.jboot.utils;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 
 
 public class ArrayUtil {
@@ -58,6 +59,19 @@ public class ArrayUtil {
             offset += array.length;
         }
         return result;
+    }
+
+    public static <T> boolean contains(T[] array, T element) {
+        if (array == null || array.length == 0) {
+            return false;
+        }
+
+        for (T t : array) {
+            if (Objects.equals(t, element)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

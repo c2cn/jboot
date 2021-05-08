@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,13 +40,14 @@ public class JbootApplication {
 
     public static void start(UndertowServer server) {
         server.start();
-        if (ApplicationUtil.isDevMode()) {
+        String resourceLoaderEnable = JbootConfigManager.me().getConfigValue("jboot.app.resourceLoaderEnable");
+        if (ApplicationUtil.isDevMode() && !"false".equalsIgnoreCase(resourceLoaderEnable)) {
             new JbootResourceLoader().start();
         }
     }
 
     public static void setBootArg(String key, Object value) {
-        JbootConfigManager.me().setBootArg(key, value);
+        JbootConfigManager.setBootArg(key, value);
     }
 
     /**
@@ -85,7 +86,6 @@ public class JbootApplication {
 
 
         return new JbootUndertowServer(undertowConfig)
-                .setDevMode(ApplicationUtil.isDevMode())
                 .configWeb(webBuilder -> {
                     tryAddMetricsSupport(webBuilder);
                     tryAddShiroSupport(webBuilder);
@@ -97,9 +97,6 @@ public class JbootApplication {
     }
 
 
-
-
-
     public static UndertowConfig createUndertowConfig(JbootApplicationConfig appConfig) {
         UndertowConfig undertowConfig = new JbootUndertowConfig(appConfig.getJfinalConfig());
         undertowConfig.addSystemClassPrefix("io.jboot.app");
@@ -109,7 +106,7 @@ public class JbootApplication {
 
 
     private static void tryAddMetricsSupport(WebBuilder webBuilder) {
-        String url = ApplicationUtil.getConfigValue("jboot.metric.url");
+        String url = ApplicationUtil.getConfigValue("jboot.metric.adminServletMapping");
         String reporter = ApplicationUtil.getConfigValue("jboot.metric.reporter");
         if (url != null && reporter != null) {
             webBuilder.addServlet("MetricsAdminServlet", "com.codahale.metrics.servlets.AdminServlet")
@@ -143,9 +140,6 @@ public class JbootApplication {
             }
         }
     }
-
-
-
 
 
 }

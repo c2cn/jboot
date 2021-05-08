@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 public class DefaultCaffeineCacheBuilder implements CaffeineCacheBuilder{
 
     @Override
-    public Cache build(){
+    public Cache build(String cacheName){
         return Caffeine.newBuilder()
                 .expireAfterWrite(24, TimeUnit.HOURS)
                 .build();

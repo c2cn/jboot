@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,12 @@ package io.jboot.support.seata.tcc;
 import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
 import io.jboot.support.seata.JbootSeataManager;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
+import io.seata.common.util.StringUtils;
+import io.seata.core.context.RootContext;
+import io.seata.core.model.BranchType;
+import io.seata.rm.tcc.api.TwoPhaseBusinessAction;
+
+import java.lang.reflect.Method;
 
 
 /**
@@ -28,7 +33,10 @@ import io.jboot.web.fixedinterceptor.FixedInterceptor;
  *
  * @author zhangsen
  */
-public class TccActionInterceptor implements Interceptor, FixedInterceptor {
+public class TccActionInterceptor implements Interceptor {
+
+
+    private ActionInterceptorHandler actionInterceptorHandler = new ActionInterceptorHandler();
 
 
     @Override
@@ -39,7 +47,36 @@ public class TccActionInterceptor implements Interceptor, FixedInterceptor {
             return;
         }
 
-        new TccActionProcesser().intercept(inv);
+        if (!RootContext.inGlobalTransaction()) {
+            // not in transaction
+            inv.invoke();
+            return;
+        }
+
+        Method method = inv.getMethod();
+        TwoPhaseBusinessAction businessAction = method.getAnnotation(TwoPhaseBusinessAction.class);
+        //try method
+        if (businessAction != null) {
+            //save the xid
+            String xid = RootContext.getXID();
+            //clear the context
+            BranchType previousBranchType = RootContext.getBranchType();
+            if (BranchType.TCC != previousBranchType) {
+                RootContext.bindBranchType(BranchType.TCC);
+            }
+            try {
+                Object[] methodArgs = inv.getArgs();
+                //Handler the TCC Aspect
+                actionInterceptorHandler.proceed(method, methodArgs, xid, businessAction, inv);
+            } finally {
+                //if not TCC, unbind branchType
+                if (BranchType.TCC != previousBranchType) {
+                    RootContext.unbindBranchType();
+                }
+            }
+        } else {
+            inv.invoke();
+        }
     }
 
 }

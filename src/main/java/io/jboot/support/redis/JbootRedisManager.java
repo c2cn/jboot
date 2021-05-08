@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,19 +54,17 @@ public class JbootRedisManager {
 
         switch (config.getType()) {
             case JbootRedisConfig.TYPE_JEDIS:
-                return getJedisClinet(config);
+                return getJedisClient(config);
             case JbootRedisConfig.TYPE_LETTUCE:
                 return getLettuceClient(config);
             case JbootRedisConfig.TYPE_REDISSON:
                 return getRedissonClient(config);
         }
-
         return null;
-
     }
 
 
-    private JbootRedis getJedisClinet(JbootRedisConfig config) {
+    private JbootRedis getJedisClient(JbootRedisConfig config) {
         if (config.isCluster()) {
             return new JbootJedisClusterImpl(config);
         } else {

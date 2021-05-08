@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 package io.jboot.components.mq.rabbitmq;
 
-import com.google.common.collect.Maps;
 import com.rabbitmq.client.*;
 import io.jboot.Jboot;
+import io.jboot.app.JbootApplicationConfig;
 import io.jboot.components.mq.Jbootmq;
 import io.jboot.components.mq.JbootmqBase;
 import io.jboot.exception.JbootException;
@@ -25,6 +25,7 @@ import io.jboot.utils.StrUtil;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * doc : http://www.rabbitmq.com/api-guide.html
@@ -33,88 +34,97 @@ public class JbootRabbitmqImpl extends JbootmqBase implements Jbootmq {
 
 
     private Connection connection;
-    private Map<String, Channel> channelMap = Maps.newConcurrentMap();
+    private Map<String, Channel> channelMap = new ConcurrentHashMap<>();
+
+    private JbootRabbitmqConfig rabbitmqConfig;
+    private JbootApplicationConfig appConfig;
+
 
     public JbootRabbitmqImpl() {
         super();
-        JbootmqRabbitmqConfig rabbitmqConfig = Jboot.config(JbootmqRabbitmqConfig.class);
-
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost(rabbitmqConfig.getHost());
-        factory.setPort(rabbitmqConfig.getPort());
-
-        if (StrUtil.isNotBlank(rabbitmqConfig.getVirtualHost())) {
-            factory.setVirtualHost(rabbitmqConfig.getVirtualHost());
-        }
-        if (StrUtil.isNotBlank(rabbitmqConfig.getUsername())) {
-            factory.setUsername(rabbitmqConfig.getUsername());
-        }
-
-        if (StrUtil.isNotBlank(rabbitmqConfig.getPassword())) {
-            factory.setPassword(rabbitmqConfig.getPassword());
-        }
+        rabbitmqConfig = Jboot.config(JbootRabbitmqConfig.class);
+        appConfig = Jboot.config(JbootApplicationConfig.class);
 
         try {
+            ConnectionFactory factory = new ConnectionFactory();
+            factory.setHost(rabbitmqConfig.getHost());
+            factory.setPort(rabbitmqConfig.getPort());
+
+            if (StrUtil.isNotBlank(rabbitmqConfig.getVirtualHost())) {
+                factory.setVirtualHost(rabbitmqConfig.getVirtualHost());
+            }
+
+            if (StrUtil.isNotBlank(rabbitmqConfig.getUsername())) {
+                factory.setUsername(rabbitmqConfig.getUsername());
+            }
+
+            if (StrUtil.isNotBlank(rabbitmqConfig.getPassword())) {
+                factory.setPassword(rabbitmqConfig.getPassword());
+            }
+
             connection = factory.newConnection();
+
         } catch (Exception e) {
-            throw new JbootException("can not connection rabbitmq server", e);
+            throw new JbootException("Can not connection rabbitmq server", e);
         }
     }
+
 
     @Override
     protected void onStartListening() {
         for (String toChannel : channels) {
-            registerListner(getChannel(toChannel), toChannel);
-        }
-    }
 
-    private void registerListner(final Channel channel, String toChannel) {
-        if (channel == null) {
-            return;
-        }
-        try {
-
-            /**
-             * Broadcast listener
-             */
-            channel.basicConsume("", true, new DefaultConsumer(channel) {
-                @Override
-                public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    Object o = getSerializer().deserialize(body);
-                    notifyListeners(envelope.getExchange(), o);
-                }
-            });
+            //广播通道
+            Channel broadcastChannel = getChannel(toChannel, false);
+            bindChannel(broadcastChannel, buildBroadcastChannelName(toChannel), toChannel);
 
 
-            /**
-             * Queue listener
-             */
-            channel.basicConsume(toChannel, true, new DefaultConsumer(channel) {
-                @Override
-                public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                    Object o = getSerializer().deserialize(body);
-                    notifyListeners(envelope.getRoutingKey(), o);
-                }
-            });
-
-        } catch (IOException e) {
-            e.printStackTrace();
+            //队列通道
+            final Channel queueChannel = getChannel(toChannel, true);
+            bindChannel(queueChannel, toChannel, toChannel);
         }
     }
 
 
-    private Channel getChannel(String toChannel) {
+    private void bindChannel(Channel channel, String name, String orginaChannelName) {
+        if (channel != null) {
+            try {
+                channel.basicConsume(name, true, new DefaultConsumer(channel) {
+                    @Override
+                    public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                        Object o = getSerializer().deserialize(body);
+                        notifyListeners(orginaChannelName, o);
+                    }
+                });
 
-        Channel channel = channelMap.get(toChannel);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    private synchronized Channel getChannel(String toChannel, boolean queueMode) {
+
+        Channel channel = channelMap.get(toChannel + queueMode);
         if (channel == null) {
             try {
                 channel = connection.createChannel();
-                channel.queueDeclare(toChannel, false, false, false, null);
-                channel.exchangeDeclare(toChannel, BuiltinExchangeType.FANOUT);
-                String queueName = channel.queueDeclare().getQueue();
-                channel.queueBind(queueName, toChannel, toChannel);
-            } catch (IOException e) {
-                throw new JbootException("can not create channel", e);
+
+                //队列模式，值需要创建定义 队列就可以了，不需要定义交换机
+                if (queueMode) {
+                    channel.queueDeclare(toChannel, true, false, false, null);
+                }
+
+                //广播模式，需要定义交换机，发送者直接把消息发送到交换机里
+                else {
+                    channel.queueDeclare(buildBroadcastChannelName(toChannel), false, false, true, null);
+                    channel.exchangeDeclare(toChannel, BuiltinExchangeType.FANOUT, true);
+                    channel.queueBind(buildBroadcastChannelName(toChannel), toChannel, "");
+                }
+
+            } catch (Exception ex) {
+                throw new JbootException("Can not create rabbit mq channel.", ex);
             }
 
             if (channel != null) {
@@ -125,9 +135,14 @@ public class JbootRabbitmqImpl extends JbootmqBase implements Jbootmq {
         return channel;
     }
 
+    private synchronized String buildBroadcastChannelName(String channel) {
+        return rabbitmqConfig.getBroadcastChannelPrefix() + channel;
+    }
+
+
     @Override
     public void enqueue(Object message, String toChannel) {
-        Channel channel = getChannel(toChannel);
+        Channel channel = getChannel(toChannel, true);
         try {
             byte[] bytes = getSerializer().serialize(message);
             channel.basicPublish("", toChannel, MessageProperties.BASIC, bytes);
@@ -136,9 +151,10 @@ public class JbootRabbitmqImpl extends JbootmqBase implements Jbootmq {
         }
     }
 
+
     @Override
     public void publish(Object message, String toChannel) {
-        Channel channel = getChannel(toChannel);
+        Channel channel = getChannel(toChannel, false);
         try {
             byte[] bytes = getSerializer().serialize(message);
             channel.basicPublish(toChannel, "", MessageProperties.BASIC, bytes);

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
  */
 package io.jboot.web.cors;
 
+import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
 import com.jfinal.ext.cors.EnableCORS;
 import io.jboot.utils.AnnotationUtil;
 import io.jboot.utils.StrUtil;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -28,7 +28,7 @@ import javax.servlet.http.HttpServletResponse;
  * @version V1.0
  * @Title: CORS 处理相关 拦截器
  */
-public class CORSInterceptor implements FixedInterceptor {
+public class CORSInterceptor implements Interceptor {
 
     private static final String METHOD_OPTIONS = "OPTIONS";
 
@@ -47,7 +47,7 @@ public class CORSInterceptor implements FixedInterceptor {
 
 
         String method = inv.getController().getRequest().getMethod();
-        if (METHOD_OPTIONS.equals(method)) {
+        if (METHOD_OPTIONS.equalsIgnoreCase(method)) {
             inv.getController().renderText("");
         } else {
             inv.invoke();
@@ -59,6 +59,7 @@ public class CORSInterceptor implements FixedInterceptor {
         EnableCORS enableCORS = inv.getController().getClass().getAnnotation(EnableCORS.class);
         return enableCORS != null ? enableCORS : inv.getMethod().getAnnotation(EnableCORS.class);
     }
+
 
     private void doConfigCORS(Invocation inv, EnableCORS enableCORS) {
 

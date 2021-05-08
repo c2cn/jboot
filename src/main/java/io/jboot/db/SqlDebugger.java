@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 package io.jboot.db;
 
-import com.jfinal.ext.kit.DateKit;
 import com.jfinal.plugin.activerecord.Config;
 import io.jboot.Jboot;
+import io.jboot.utils.DateUtil;
 import io.jboot.utils.StrUtil;
 
+import java.sql.SQLException;
 import java.util.Date;
 import java.util.regex.Matcher;
 
@@ -31,14 +32,20 @@ public class SqlDebugger {
 
     private static SqlDebugPrinter defaultPrinter = new SqlDebugPrinter() {
 
+        private boolean printSqlEnable = Jboot.isDevMode();
+
         @Override
-        public boolean isPrint(Config config, String sql, Object... paras) {
-            return Jboot.isDevMode();
+        public boolean isPrintEnable(Config config) {
+            return printSqlEnable;
         }
 
         @Override
-        public void print(String sql) {
-            System.out.println("\r\njboot exec sql >>> " + sql);
+        public void print(String sql, Long takedTimeMillis) {
+            if (takedTimeMillis != null) {
+                System.out.println("Jboot exec sql taked " + takedTimeMillis + " ms >>>  " + sql);
+            } else {
+                System.out.println("Jboot exec sql >>>  " + sql);
+            }
         }
     };
 
@@ -52,13 +59,21 @@ public class SqlDebugger {
         SqlDebugger.printer = printer;
     }
 
-    public static void debug(Config config, String sql, Object... paras) {
-
-        if (!printer.isPrint(config, sql, paras)) {
-            return;
+    public static <T> T run(SqlRunner<T> runner, Config config, String sql, Object... paras) throws SQLException {
+        if (!printer.isPrintEnable(config)) {
+            return runner.run();
+        } else {
+            long timeMillis = System.currentTimeMillis();
+            try {
+                return runner.run();
+            } finally {
+                doDebug(System.currentTimeMillis() - timeMillis, sql, paras);
+            }
         }
+    }
 
 
+    private static void doDebug(Long takedTimeMillis, String sql, Object... paras) {
         if (paras != null) {
             for (Object value : paras) {
                 // null
@@ -66,7 +81,7 @@ public class SqlDebugger {
                     sql = sql.replaceFirst("\\?", "null");
                 }
                 // number
-                else if (value instanceof Number) {
+                else if (value instanceof Number || value instanceof Boolean) {
                     sql = sql.replaceFirst("\\?", value.toString());
                 }
                 // numeric
@@ -78,7 +93,7 @@ public class SqlDebugger {
                     StringBuilder sb = new StringBuilder();
                     sb.append("'");
                     if (value instanceof Date) {
-                        sb.append(DateKit.toStr((Date) value, DateKit.timeStampPattern));
+                        sb.append(DateUtil.toDateTimeString((Date) value));
                     } else {
                         sb.append(value.toString());
                     }
@@ -88,15 +103,17 @@ public class SqlDebugger {
             }
         }
 
-        printer.print(sql);
+        printer.print(sql, takedTimeMillis);
     }
 
 
     public static interface SqlDebugPrinter {
+        public boolean isPrintEnable(Config config);
 
-        public boolean isPrint(Config config, String sql, Object... paras);
-
-        public void print(String sql);
+        public void print(String sql, Long takedTimeMillis);
     }
 
+    public static interface SqlRunner<V> {
+        V run() throws SQLException;
+    }
 }

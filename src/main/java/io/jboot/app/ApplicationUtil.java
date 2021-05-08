@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,14 @@ package io.jboot.app;
 
 import io.jboot.app.config.JbootConfigManager;
 
+import java.io.File;
 import java.net.URISyntaxException;
 import java.net.URL;
 
-class ApplicationUtil {
+public class ApplicationUtil {
 
     static JbootApplicationConfig getAppConfig(String[] args) {
-        JbootConfigManager.me().parseArgs(args);
+        JbootConfigManager.parseArgs(args);
         return getConfig(JbootApplicationConfig.class);
     }
 
@@ -40,13 +41,36 @@ class ApplicationUtil {
         System.out.println(appConfig.toString());
     }
 
+    public static boolean runInFatjar() {
+        URL url = Thread.currentThread().getContextClassLoader().getResource("");
+        if (url == null) {
+            return true;
+        }
+
+        if ("jar".equalsIgnoreCase(url.getProtocol())) {
+            return true;
+        }
+
+        String urlStr = url.toString().toLowerCase();
+        if (urlStr.endsWith(".jar!/")) {
+            return true;
+        }
+
+        // 在某些情况下 通过 java -jar 运行时，会以 /config/ 结束
+        if (urlStr.endsWith("/config/")) {
+            File urlPath = new File(url.getPath());
+            return !urlPath.exists() || !urlPath.isDirectory();
+        }
+
+        return false;
+    }
+
     static void printClassPath() {
         try {
-            URL resourceURL = ApplicationUtil.class.getResource("/");
-            if (resourceURL != null) {
-                System.out.println("Classpath : " + resourceURL.toURI().getPath());
+            if (runInFatjar()) {
+                System.out.println("JbootApplication is running in fatjar.");
             } else {
-                System.out.println("Classpath : application in one jar.");
+                System.out.println("JbootApplication ClassPath: " + ApplicationUtil.class.getResource("/").toURI().getPath());
             }
         } catch (URISyntaxException e) {
             e.printStackTrace();
@@ -61,7 +85,6 @@ class ApplicationUtil {
     static String getConfigValue(String key) {
         return JbootConfigManager.me().getConfigValue(key);
     }
-
 
 
     static boolean isDevMode() {

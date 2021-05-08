@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,14 @@
  */
 package io.jboot.components.gateway;
 
+import com.jfinal.kit.Ret;
+import io.jboot.Jboot;
+import io.jboot.utils.StrUtil;
+import io.jboot.web.render.JbootJsonRender;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.net.ConnectException;
 
 /**
  * @author michael yang (fuhai999@gmail.com)
@@ -29,6 +35,12 @@ public class GatewayInvocation {
     private HttpServletRequest request;
     private HttpServletResponse response;
     private GatewayHttpProxy proxy;
+    private String proxyUrl;
+
+    //是否跳过错误渲染，如果跳过，那么则由拦截器通过 getResponse() 自行渲染
+    private boolean skipExceptionRender = false;
+
+    private static boolean devMode = Jboot.isDevMode();
 
     private int index = 0;
 
@@ -37,12 +49,14 @@ public class GatewayInvocation {
         this.config = config;
         this.request = request;
         this.response = response;
+        this.inters = config.getGatewayInterceptors();
         this.proxy = new GatewayHttpProxy(config);
-        this.inters = config.buildInterceptors();
+        this.proxyUrl = buildProxyUrl(config, request);
     }
 
+
     public void invoke() {
-        if (inters == null || inters.length == 0) {
+        if (inters.length == 0) {
             doInvoke();
             return;
         }
@@ -53,15 +67,71 @@ public class GatewayInvocation {
         }
     }
 
-    protected void doInvoke(){
-        Runnable runnable = () -> {
-            proxy.sendRequest(GatewayUtil.buildProxyUrl(config, request), request, response);
-        };
-        if (config.isSentinelEnable()) {
-            new GatewaySentinelProcesser().process(runnable, config, request, response);
-        } else {
-            runnable.run();
+
+    protected void doInvoke() {
+        if (StrUtil.isBlank(proxyUrl)) {
+            renderError(null, GatewayErrorRender.noneHealthUrl, config, request, response);
+            return;
         }
+
+        if (devMode) {
+            System.out.println("Jboot Gateway >>> " + proxyUrl);
+        }
+
+        //启用 Sentinel 限流
+        if (config.isSentinelEnable()) {
+            new GatewaySentinelProcesser().process(proxy, proxyUrl, config, request, response, skipExceptionRender);
+            return;
+        }
+
+
+        //未启用 Sentinel 的情况
+        proxy.sendRequest(proxyUrl, request, response);
+
+
+        Exception exception = proxy.getException();
+        if (exception != null && !skipExceptionRender) {
+            if (exception instanceof ConnectException) {
+                renderError(exception, GatewayErrorRender.connectionError, config, request, response);
+            } else {
+                Ret ret = Ret.fail().set("errorCode", 9).set("message", exception.getMessage());
+                renderError(exception, ret, config, request, response);
+            }
+        }
+
+    }
+
+
+    private static void renderError(Exception error, Ret errorMessage, JbootGatewayConfig config, HttpServletRequest request, HttpServletResponse response) {
+        GatewayErrorRender errorRender = JbootGatewayManager.me().getGatewayErrorRender();
+        if (errorRender != null) {
+            errorRender.renderError(error, errorMessage, config, request, response);
+        } else {
+            new JbootJsonRender(errorMessage).setContext(request, response).render();
+        }
+    }
+
+
+    private static String buildProxyUrl(JbootGatewayConfig config, HttpServletRequest request) {
+        //配置负载均衡策略
+        GatewayLoadBalanceStrategy lbs = config.buildLoadBalanceStrategy();
+
+        //通过负载均衡策略获取 URL 地址
+        String url = lbs.getUrl(config, request);
+        if (StrUtil.isBlank(url)) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder(url);
+        if (StrUtil.isNotBlank(request.getRequestURI())) {
+            sb.append(request.getRequestURI());
+        }
+
+        if (StrUtil.isNotBlank(request.getQueryString())) {
+            sb.append("?").append(request.getQueryString());
+        }
+
+        return sb.toString();
     }
 
 
@@ -109,7 +179,28 @@ public class GatewayInvocation {
         return proxy;
     }
 
+
+    public void setProxy(GatewayHttpProxy proxy) {
+        this.proxy = proxy;
+    }
+
     public boolean hasException() {
         return proxy.getException() != null;
+    }
+
+    public String getProxyUrl() {
+        return proxyUrl;
+    }
+
+    public void setProxyUrl(String proxyUrl) {
+        this.proxyUrl = proxyUrl;
+    }
+
+    public boolean isSkipExceptionRender() {
+        return skipExceptionRender;
+    }
+
+    public void setSkipExceptionRender(boolean skipExceptionRender) {
+        this.skipExceptionRender = skipExceptionRender;
     }
 }

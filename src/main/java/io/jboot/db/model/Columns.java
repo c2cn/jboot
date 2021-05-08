@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,7 @@ import io.jboot.db.dialect.JbootSqlServerDialect;
 import io.jboot.utils.StrUtil;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Column 的工具类，用于方便组装sql
@@ -43,9 +40,9 @@ public class Columns implements Serializable {
      * return findFirstByColumns(Columns.create("account_id", accountId));
      * }
      * ```
-     * 根据账户 id 来查询账户的 门店，此时 如果传入 null 值，则返回了 第一个门店，和我们想要的结果集是不同的。
+     * 根据账户 id 来查询该账户对应的 ShopInfo，此时 如果传入 null 值，则返回了 第一个 ShopInfo，这个 ShopInfo 可能并不是该账户的。
      * <p>
-     * 准确的结果，应该是当用户传入 null 值的时候，应该直接 返回 null 。
+     * 在这种场景下，我们就不应该允许用户传入 null 值进行查询，当传入 null 的时候直接抛出异常即可 。
      * <p>
      * 此时，我们可以使用如下代码进行查询。
      * <p>
@@ -54,8 +51,6 @@ public class Columns implements Serializable {
      * return findFirstByColumns(Columns.safeMode().eq("account_id", accountId));
      * }
      * ```
-     * <p>
-     * 使用 safeMode 的时候，默认传入的值必须全部不为空，才能返回结果，否则直接返回 null 。
      */
     private boolean useSafeMode = false;
 
@@ -295,12 +290,13 @@ public class Columns implements Serializable {
      * in list
      *
      * @param name
-     * @param list
+     * @param collection
      * @return
      */
-    public Columns in(String name, List list) {
-        if (list != null && !list.isEmpty()) {
-            in(name, list.toArray());
+    public Columns in(String name, Collection collection) {
+        Util.checkNullParas(this, collection);
+        if (collection != null && !collection.isEmpty()) {
+            in(name, collection.toArray());
         }
         return this;
     }
@@ -322,12 +318,13 @@ public class Columns implements Serializable {
      * not in list
      *
      * @param name
-     * @param list
+     * @param collection
      * @return
      */
-    public Columns notIn(String name, List list) {
-        if (list != null && !list.isEmpty()) {
-            notIn(name, list.toArray());
+    public Columns notIn(String name, Collection collection) {
+        Util.checkNullParas(this, collection);
+        if (collection != null && !collection.isEmpty()) {
+            notIn(name, collection.toArray());
         }
         return this;
     }
@@ -389,6 +386,44 @@ public class Columns implements Serializable {
         if (conditon && !columns.isEmpty()) {
             add(new Group(columns));
         }
+        return this;
+    }
+
+    /**
+     * @param name
+     * @return
+     */
+    public Columns groupBy(String name){
+        add(new GroupBy(name));
+        return this;
+    }
+
+    /**
+     * @param name
+     * @return
+     */
+    public Columns having(String name){
+        add(new Having(name));
+        return this;
+    }
+
+
+    /**
+     * @param sql
+     * @return
+     */
+    public Columns having(String sql,Object ... paras){
+        add(new Having(sql,paras));
+        return this;
+    }
+
+
+    /**
+     * @param columns
+     * @return
+     */
+    public Columns having(Columns columns){
+        add(new Having(columns));
         return this;
     }
 
@@ -639,7 +674,7 @@ public class Columns implements Serializable {
             } else {
                 s.append(column.getName())
                         .append(SQL_CACHE_SEPARATOR)
-                        .append(getLogicStr(column.getLogic()))
+                        .append(getLogicString(column.getLogic()))
                         .append(SQL_CACHE_SEPARATOR);
                 Object value = column.getValue();
                 if (value != null) {
@@ -660,7 +695,7 @@ public class Columns implements Serializable {
      * @param logic
      * @return
      */
-    private String getLogicStr(String logic) {
+    private static String getLogicString(String logic) {
         switch (logic) {
             case Column.LOGIC_LIKE:
                 return "lk";
@@ -695,7 +730,7 @@ public class Columns implements Serializable {
 
 
     /**
-     * 输出 where 后面的 sql 部分，风格是 mysql 的风格SQL
+     * 输出 where 后面的 sql 部分，风格是 mysql 的风格 SQL
      * @return
      */
     public String toWherePartSql() {
@@ -705,7 +740,7 @@ public class Columns implements Serializable {
 
 
     /**
-     * 输出 where 后面的 sql 部分，风格是 mysql 的风格SQL
+     * 输出 where 后面的 sql 部分，风格是 mysql 的风格 SQL
      * @param withWhereKeyword 是否带上 where 关键字
      * @return
      */
@@ -727,27 +762,6 @@ public class Columns implements Serializable {
         return sb.toString();
     }
 
-
-
-    /**
-     * 这个只是用于调试
-     *
-     * @return
-     */
-    public String toMysqlSql() {
-        JbootMysqlDialect dialect = new JbootMysqlDialect();
-        return dialect.forFindByColumns(null, "table", "*", getList(), null, null);
-    }
-
-
-    /**
-     * 这个只是用于调试
-     * @return
-     */
-    public String toSqlServerSql() {
-        JbootSqlServerDialect dialect = new JbootSqlServerDialect();
-        return dialect.forFindByColumns(null, "table", "*", getList(), null, null);
-    }
 
     @Override
     public String toString() {
@@ -789,10 +803,11 @@ public class Columns implements Serializable {
         columns.between("name", "123", "1233");
         columns.or();
 
-        columns.sqlPartWithoutLink("group by xxx");
-        columns.or();
-        columns.or();
-        columns.or();
+//        columns.sqlPartWithoutLink("group by xxx");
+        columns.groupBy("aaa").having(Columns.create("aaa","bbb").ge("ccc",111));
+//        columns.or();
+//        columns.or();
+//        columns.or();
 
         System.out.println(columns.getCacheKey());
         System.out.println(Arrays.toString(columns.getValueArray()));
@@ -800,6 +815,26 @@ public class Columns implements Serializable {
         System.out.println("-----------");
         System.out.println(columns.toWherePartSql('"',true));
 
+    }
+
+    /**
+     * 这个只是用于调试
+     *
+     * @return
+     */
+    private String toMysqlSql() {
+        JbootMysqlDialect dialect = new JbootMysqlDialect();
+        return dialect.forFindByColumns(null,null, "table", "*", getList(), null, null);
+    }
+
+
+    /**
+     * 这个只是用于调试
+     * @return
+     */
+    private String toSqlServerSql() {
+        JbootSqlServerDialect dialect = new JbootSqlServerDialect();
+        return dialect.forFindByColumns(null,null, "table", "*", getList(), null, null);
     }
 
 }

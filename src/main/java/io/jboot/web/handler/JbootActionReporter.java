@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,17 @@
 package io.jboot.web.handler;
 
 import com.jfinal.aop.Interceptor;
+import com.jfinal.aop.Invocation;
 import com.jfinal.core.Action;
+import com.jfinal.core.ActionReporter;
 import com.jfinal.core.Controller;
+import com.jfinal.core.JFinal;
+import com.jfinal.kit.JsonKit;
+import io.jboot.Jboot;
 import io.jboot.JbootConsts;
+import io.jboot.support.jwt.JwtInterceptor;
+import io.jboot.utils.RequestUtil;
+import io.jboot.web.controller.JbootController;
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
@@ -41,6 +49,8 @@ public class JbootActionReporter {
     private static final String interceptMethodDesc = "(Lcom/jfinal/aop/Invocation;)V";
     private static int maxOutputLengthOfParaValue = 512;
     private static Writer writer = new SystemOutWriter();
+    private static ActionReporter actionReporter = JFinal.me().getConstants().getActionReporter();
+    private static boolean reportEnable = Jboot.isDevMode();
 
     private static final ThreadLocal<SimpleDateFormat> sdf = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
 
@@ -59,11 +69,31 @@ public class JbootActionReporter {
         JbootActionReporter.writer = writer;
     }
 
+    public static boolean isReportEnable() {
+        return reportEnable;
+    }
+
+    public static void setReportEnable(boolean reportEnable) {
+        JbootActionReporter.reportEnable = reportEnable;
+    }
 
     /**
      * Report the action
      */
-    public static final void report(String target, Controller controller, Action action, long time) throws Exception {
+    public static final void report(String target, Controller controller, Action action, Invocation invocation, long time) {
+        try {
+            doReport(target, controller, action, invocation, time);
+        } catch (Exception ex) {
+            // 出错的情况，一般情况下是：用户自定义了自己的 classloader, 此 classloader 加载的 class 没有被添加到 javassist 的 ClassPool
+            // 如何添加可以参考 jpress 的 插件加载
+            actionReporter.report(target, controller, action);
+        } finally {
+            JbootActionInvocation.clear();
+        }
+    }
+
+
+    private static final void doReport(String target, Controller controller, Action action, Invocation invocation, long time) throws Exception {
         CtClass ctClass = ClassPool.getDefault().get(action.getControllerClass().getName());
         String desc = JbootActionReporterUtil.getMethodDescWithoutName(action.getMethod());
         CtMethod ctMethod = ctClass.getMethod(action.getMethodName(), desc);
@@ -73,6 +103,11 @@ public class JbootActionReporter {
         sb.append("Request     : ").append(controller.getRequest().getMethod()).append(" ").append(target).append("\n");
         Class cc = action.getMethod().getDeclaringClass();
         sb.append("Controller  : ").append(cc.getName()).append(".(").append(getClassFileName(cc)).append(".java:" + lineNumber + ")");
+        if (JbootActionInvocation.isControllerInvoked()) {
+            sb.append(ConsoleColor.GREEN_BRIGHT + " ---> invoked √" + ConsoleColor.RESET);
+        } else {
+            sb.append(ConsoleColor.RED_BRIGHT + " ---> skipped ×" + ConsoleColor.RESET);
+        }
         sb.append("\nMethod      : ").append(JbootActionReporterUtil.getMethodString(action.getMethod())).append("\n");
 
 
@@ -81,8 +116,11 @@ public class JbootActionReporter {
             sb.append("UrlPara     : ").append(urlParas).append("\n");
         }
 
-        Interceptor[] inters = action.getInterceptors();
-        List<Interceptor> invokedInterceptors = JbootInvocationWarpper.getInvokedInterceptor();
+        Interceptor[] inters = invocation instanceof JbootActionInvocation ? ((JbootActionInvocation) invocation).getInters() : action.getInterceptors();
+        List<Interceptor> invokedInterceptors = JbootActionInvocation.getInvokedInterceptor();
+
+        boolean printJwt = false;
+
         if (inters.length > 0) {
             sb.append("Interceptor : ");
             for (int i = 0; i < inters.length; i++) {
@@ -91,6 +129,10 @@ public class JbootActionReporter {
                 }
                 Interceptor inter = inters[i];
                 Class ic = inter.getClass();
+
+                if (ic == JwtInterceptor.class) {
+                    printJwt = true;
+                }
 
                 CtClass icClass = ClassPool.getDefault().get(ic.getName());
                 CtMethod icMethod = icClass.getMethod("intercept", interceptMethodDesc);
@@ -124,8 +166,9 @@ public class JbootActionReporter {
                 } else {
                     sb.append(name).append("[]={");
                     for (int i = 0; i < values.length; i++) {
-                        if (i > 0)
+                        if (i > 0) {
                             sb.append(",");
+                        }
                         sb.append(values[i]);
                     }
                     sb.append("}");
@@ -134,15 +177,22 @@ public class JbootActionReporter {
             }
             sb.append("\n");
         }
-        sb.append("----------------------------------- taked " + (System.currentTimeMillis() - time) + " ms --------------------------------\n");
 
-        try {
-            writer.write(sb.toString());
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        } finally {
-            JbootInvocationWarpper.clear();
+
+        if (!"GET".equalsIgnoreCase(controller.getRequest().getMethod()) && !RequestUtil.isMultipartRequest(controller.getRequest())) {
+            sb.append("RawData     : ").append(controller.getRawData());
+            sb.append("\n");
         }
+
+        if (printJwt && controller instanceof JbootController) {
+            sb.append("Jwt         : ").append(JsonKit.toJson(((JbootController) controller).getJwtParas()));
+            sb.append("\n");
+        }
+
+
+        sb.append("----------------------------------- taked " + (System.currentTimeMillis() - time) + " ms --------------------------------\n\n\n");
+
+        writer.write(sb.toString());
     }
 
 

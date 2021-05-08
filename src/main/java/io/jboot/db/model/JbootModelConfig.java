@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +59,14 @@ public class JbootModelConfig {
      */
     private boolean idCacheEnable = true;
 
+    /**
+     * 从缓存获取数据的时候，是复制一个返回，这样保证前端在修改的时候不修改到缓存数据
+     */
+    private boolean idCacheByCopyEnable = true;
+
 
     private String idCacheType = Jboot.config(JbootCacheConfig.class).getType();
+
 
 
     public String getScanPackage() {
@@ -125,6 +131,14 @@ public class JbootModelConfig {
 
     public void setIdCacheEnable(boolean idCacheEnable) {
         this.idCacheEnable = idCacheEnable;
+    }
+
+    public boolean isIdCacheByCopyEnable() {
+        return idCacheByCopyEnable;
+    }
+
+    public void setIdCacheByCopyEnable(boolean idCacheByCopyEnable) {
+        this.idCacheByCopyEnable = idCacheByCopyEnable;
     }
 
     public String getIdCacheType() {

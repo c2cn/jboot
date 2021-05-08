@@ -13,7 +13,6 @@
 - 开启 Nacos 分布式配置中心
 - 开启 Apollo 分布式配置中心
 - 配置内容加密解密
-- 设计原因
 - 常见问题
 - Jboot所有配置参考
 
@@ -22,13 +21,17 @@
 在 Jboot 应用中，可以通过几下几种方式给 Jboot 应用进行配置。
 
 - jboot.properties 配置文件
+- jboot-xxx.properties 配置文件
 - 环境变量
 - Jvm 系统属性
 - 启动参数
 - 分布式配置中心（目前支持 Apollo 和 Nacos）
 
-> 注意：如果同一个属性被多处配置，那么 Jboot 读取配置的优先顺序是：
-> `分布式配置中心` > `启动参数` > `Jvm 系统属性` > `环境变量` > `jboot.properties 配置`
+> 注意：
+> 1、如果同一个属性被多处配置，那么 Jboot 读取配置的优先顺序是：
+> `分布式配置中心` > `启动参数` > `Jvm 系统属性` > `环境变量` > `jboot-xxx.properties` > `jboot.properties`。
+> 
+> 2、jboot-xxx.properties 的含义是：当配置 jboot.app.mode=dev 时，默认去读取 jboot-dev.properties，同理当配置 jboot.app.mode=product 时，默认去读取 jboot-product.properties，jboot-xxx.properties 的文件名称是来源于 jboot.app.mode 的配置。jboot-xxx.properties 这个文件并不是必须的，但当该配置文件存在时，其优读取顺序先于 jboot.properties。
 
 
 
@@ -182,7 +185,7 @@ public class Component1Config{
     private String password;
     private long timeout;
 
-    // 下方应该还有 getter setter， 略
+    // 下方应还有 getter setter， 此处略
 }
 ```
 
@@ -196,7 +199,17 @@ Component1Config config = Jboot.config(Component1Config.class);
 
 ```
 
-> 备注：`@ConfigModel(prefix="component1")` 注解的含义是 `Component1Config` 的前缀是 `component1` ，因此，其属性 `host` 是来至配置文件的 `component1.host` 的值。
+配置内如如下：
+
+```properties
+component1.host = xxx
+component1.port = xxx
+component1.accout = xxx
+component1.password = xxx
+component1.timeout = xxx
+```
+
+> 备注：`@ConfigModel(prefix="component1")` 注解的含义是 `Component1Config` 的前缀是 `component1` ，因此，其属性 `host` 是来至配置文件的 `component1.host` 的值。
 
 
 
@@ -217,7 +230,33 @@ Component1Config config = Jboot.config(Component1Config.class);
 
 **第二步：启动 nacos**
 
-如何启动 nacos 的相关文档在 
+- Clone Nacos 项目
+
+```
+git clone https://github.com/nacos-group/nacos-docker.git
+cd nacos-docker
+```
+
+单机模式 Derby
+```
+docker-compose -f example/standalone-derby.yaml up
+```
+
+单机模式 Mysql
+```
+docker-compose -f example/standalone-mysql.yaml up
+```
+
+集群模式
+```
+docker-compose -f example/cluster-hostname.yaml up 
+```
+
+Nacos 控制台
+
+link：http://127.0.0.1:8848/nacos/
+
+nacos 的相关文档在 
 
 https://nacos.io/zh-cn/docs/quick-start.html 
 
@@ -235,7 +274,7 @@ jboot.config.nacos.dataId = jboot
 jboot.config.nacos.group = jboot
 ```
 
-支持如下更多配置，但是最简单的只需要以上配置就可以正常运行
+nacos 支持如下更多配置，但是只需要以上配置就可以正常运行。
     
 
 ```
@@ -286,11 +325,11 @@ jboot.config.apollo.meta = http://106.54.227.205:8080
 
 ## 配置内容加密解密
 
-为了安全起见，很多时候我们需要对配置里的一些安全和隐私内容进行加密，比如数据库的账号密码等，防止web服务器被黑客入侵时保证数据库的安全。
+为了安全起见，我们需要对配置里的一些内容进行加密，比如数据库的账号、密码等，防止 web 服务器被黑客入侵时保证数据库的安全。
 
 配置的内容加密是由用户自己编写加密算法。此时，Jboot 读取的只是加密的内容，为了能正常还原解密之后的内容，用户需要给 `JbootConfigManager` 配置上解密的实现 JbootConfigDecryptor。
 
-一般情况下，我们需要在 JbootAppListener 的 onInit() 里去配置。例如：
+一般情况下，我们需要在 JbootAppListener 的 `onInit()` 里去配置。例如：
 
 ```java
 public MyApplicationListener implements JbootAppListener {
@@ -315,11 +354,6 @@ public MyConfigDecriptor implements JbootConfigDecryptor {
 }
 ```
 
-## 设计原因
-
-由于 Jboot 定位是微服务框架，同时 Jboot 假设：基于 Jboot 开发的应用部署在 Docker 之上。
-
-因此，在做 Devops 的时候，编排工具（例如：k8s、mesos）会去修改应用的相关配置，而通过环境变量和启动配置，无疑是最方便快捷的。
 
 
 ## 常见问题

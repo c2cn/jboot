@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,45 +19,56 @@ import com.jfinal.aop.Aop;
 import com.jfinal.aop.AopManager;
 import com.jfinal.config.*;
 import com.jfinal.core.Controller;
+import com.jfinal.core.Path;
 import com.jfinal.json.JsonManager;
 import com.jfinal.kit.LogKit;
 import com.jfinal.kit.PathKit;
 import com.jfinal.kit.PropKit;
 import com.jfinal.plugin.activerecord.ActiveRecordPlugin;
+import com.jfinal.template.Directive;
 import com.jfinal.template.Engine;
 import io.jboot.Jboot;
 import io.jboot.aop.JbootAopFactory;
-import io.jboot.aop.JbootAopInterceptor;
 import io.jboot.aop.jfinal.JfinalHandlers;
 import io.jboot.aop.jfinal.JfinalPlugins;
-import io.jboot.app.config.support.apollo.ApolloServerConfig;
+import io.jboot.app.ApplicationUtil;
+import io.jboot.components.cache.support.JbootCaptchaCache;
+import io.jboot.components.cache.support.JbootTokenCache;
 import io.jboot.components.gateway.JbootGatewayHandler;
 import io.jboot.components.gateway.JbootGatewayManager;
 import io.jboot.components.limiter.LimiterManager;
 import io.jboot.components.rpc.JbootrpcManager;
 import io.jboot.components.schedule.JbootScheduleManager;
 import io.jboot.core.listener.JbootAppListenerManager;
-import io.jboot.core.log.Slf4jLogFactory;
+import io.jboot.core.log.JbootLogFactory;
 import io.jboot.db.ArpManager;
+import io.jboot.support.metric.JbootMetricConfig;
+import io.jboot.support.metric.MetricServletHandler;
+import io.jboot.support.metric.request.JbootRequestMetricHandler;
 import io.jboot.support.seata.JbootSeataManager;
-import io.jboot.support.sentinel.SentinelManager;
+import io.jboot.support.sentinel.JbootSentinelManager;
+import io.jboot.support.sentinel.SentinelConfig;
+import io.jboot.support.sentinel.SentinelHandler;
 import io.jboot.support.shiro.JbootShiroManager;
 import io.jboot.support.swagger.JbootSwaggerConfig;
 import io.jboot.support.swagger.JbootSwaggerController;
 import io.jboot.support.swagger.JbootSwaggerManager;
 import io.jboot.utils.*;
-import io.jboot.web.JbootJson;
+import io.jboot.web.JbootAciontMapping;
+import io.jboot.web.JbootWebConfig;
+import io.jboot.web.attachment.AttachmentHandler;
+import io.jboot.web.attachment.LocalAttachmentContainerConfig;
 import io.jboot.web.controller.JbootControllerManager;
+import io.jboot.web.controller.annotation.GetMapping;
+import io.jboot.web.controller.annotation.PostMapping;
 import io.jboot.web.controller.annotation.RequestMapping;
-import io.jboot.web.directive.annotation.JFinalDirective;
-import io.jboot.web.directive.annotation.JFinalSharedMethod;
-import io.jboot.web.directive.annotation.JFinalSharedObject;
-import io.jboot.web.directive.annotation.JFinalSharedStaticMethod;
-import io.jboot.web.fixedinterceptor.FixedInterceptors;
+import io.jboot.web.directive.SharedEnumObject;
+import io.jboot.web.directive.annotation.*;
 import io.jboot.web.handler.JbootActionHandler;
-import io.jboot.web.handler.JbootFilterHandler;
 import io.jboot.web.handler.JbootHandler;
+import io.jboot.web.json.JbootJson;
 import io.jboot.web.render.JbootRenderFactory;
+import io.jboot.web.xss.XSSHandler;
 
 import java.io.File;
 import java.sql.Driver;
@@ -77,8 +88,10 @@ public class JbootCoreConfig extends JFinalConfig {
 
         initSystemProperties();
 
+        // 自动为 Interceptor 和 Controller 等添加依赖注入
         AopManager.me().setInjectDependency(true);
         AopManager.me().setAopFactory(JbootAopFactory.me());
+
         Aop.inject(this);
 
         JbootAppListenerManager.me().onInit();
@@ -111,14 +124,6 @@ public class JbootCoreConfig extends JFinalConfig {
                 }
             }
         }
-
-        //apollo 配置
-        ApolloServerConfig apolloConfig = Jboot.config(ApolloServerConfig.class);
-        if (apolloConfig.isEnable() && apolloConfig.isConfigOk()) {
-            System.setProperty("app.id", apolloConfig.getAppId());
-            System.setProperty("apollo.meta", apolloConfig.getMeta());
-        }
-
     }
 
 
@@ -127,15 +132,8 @@ public class JbootCoreConfig extends JFinalConfig {
 
         constants.setRenderFactory(JbootRenderFactory.me());
         constants.setDevMode(Jboot.isDevMode());
-//        ApiConfigKit.setDevMode(Jboot.isDevMode());
-//
-//        JbootWechatConfig config = Jboot.config(JbootWechatConfig.class);
-//        ApiConfig apiConfig = config.getApiConfig();
-//        if (apiConfig != null) {
-//            ApiConfigKit.putApiConfig(apiConfig);
-//        }
 
-        constants.setLogFactory(new Slf4jLogFactory());
+        constants.setLogFactory(new JbootLogFactory());
         constants.setMaxPostSize(1024 * 1024 * 2000);
         constants.setReportAfterInvocation(false);
 
@@ -143,6 +141,12 @@ public class JbootCoreConfig extends JFinalConfig {
         constants.setJsonFactory(JbootJson::new);
         constants.setInjectDependency(true);
 
+        constants.setTokenCache(new JbootTokenCache());
+        constants.setCaptchaCache(new JbootCaptchaCache());
+
+        constants.setBaseUploadPath(LocalAttachmentContainerConfig.getInstance().buildUploadAbsolutePath());
+
+        constants.setActionMapping(JbootAciontMapping::new);
 
         JbootAppListenerManager.me().onConstantConfig(constants);
 
@@ -154,26 +158,12 @@ public class JbootCoreConfig extends JFinalConfig {
 
         routes.setMappingSuperClass(true);
 
-
         List<Class<Controller>> controllerClassList = ClassScanner.scanSubClass(Controller.class);
         if (ArrayUtil.isNotEmpty(controllerClassList)) {
             for (Class<Controller> clazz : controllerClassList) {
-                RequestMapping mapping = clazz.getAnnotation(RequestMapping.class);
-                if (mapping == null) {
-                    continue;
-                }
-
-                String value = AnnotationUtil.get(mapping.value());
-                if (value == null) {
-                    continue;
-                }
-
-                String viewPath = AnnotationUtil.get(mapping.viewPath());
-
-                if (StrUtil.isNotBlank(viewPath)) {
-                    routes.add(value, clazz, viewPath);
-                } else {
-                    routes.add(value, clazz);
+                String[] valueAndViewPath = getMappingValueAndViewPath(clazz);
+                if (valueAndViewPath != null) {
+                    initRoutes(routes, clazz, valueAndViewPath[0], valueAndViewPath[1]);
                 }
             }
         }
@@ -186,50 +176,108 @@ public class JbootCoreConfig extends JFinalConfig {
         JbootAppListenerManager.me().onRouteConfig(routes);
 
         for (Routes.Route route : routes.getRouteItemList()) {
-            JbootControllerManager.me().setMapping(route.getControllerKey(), route.getControllerClass());
+            JbootControllerManager.me().setMapping(route.getControllerPath(), route.getControllerClass());
         }
 
         routeList.addAll(routes.getRouteItemList());
     }
 
+    private String[] getMappingValueAndViewPath(Class<? extends Controller> clazz) {
+        RequestMapping rm = clazz.getAnnotation(RequestMapping.class);
+        if (rm != null) {
+            return new String[]{rm.value(), rm.viewPath()};
+        }
+
+        Path path = clazz.getAnnotation(Path.class);
+        if (path != null) {
+            return new String[]{path.value(), path.viewPath()};
+        }
+
+        GetMapping gp = clazz.getAnnotation(GetMapping.class);
+        if (gp != null) {
+            return new String[]{gp.value(), gp.viewPath()};
+        }
+
+        PostMapping pp = clazz.getAnnotation(PostMapping.class);
+        if (pp != null) {
+            return new String[]{pp.value(), pp.viewPath()};
+        }
+
+        return null;
+    }
+
+
+    private void initRoutes(Routes routes, Class<Controller> controllerClass, String path, String viewPath) {
+        if (StrUtil.isBlank(path)) {
+            return;
+        } else {
+            path = AnnotationUtil.get(path);
+        }
+
+        viewPath = AnnotationUtil.get(viewPath);
+
+        if (Path.NULL_VIEW_PATH.equals(viewPath)) {
+            routes.add(path, controllerClass);
+        } else {
+            routes.add(path, controllerClass, viewPath);
+        }
+    }
+
+
     @Override
     public void configEngine(Engine engine) {
 
         //通过 java -jar xxx.jar 在单独的jar里运行
-        if (runInFatjar()) {
+        if (ApplicationUtil.runInFatjar()) {
             engine.setToClassPathSourceFactory();
             engine.setBaseTemplatePath("webapp");
         }
 
         List<Class> directiveClasses = ClassScanner.scanClass();
-        for (Class clazz : directiveClasses) {
-            JFinalDirective directive = (JFinalDirective) clazz.getAnnotation(JFinalDirective.class);
-            if (directive != null) {
-                engine.addDirective(AnnotationUtil.get(directive.value()), clazz);
+        for (Class<?> clazz : directiveClasses) {
+
+            if (Directive.class.isAssignableFrom(clazz)) {
+                JFinalDirective directive = clazz.getAnnotation(JFinalDirective.class);
+                if (directive != null) {
+                    String name = AnnotationUtil.get(directive.value());
+                    if (directive.override()) {
+                        //remove old directive
+                        engine.removeDirective(name);
+                    }
+                    engine.addDirective(name, (Class<? extends Directive>) clazz);
+                }
+            } else if (clazz.isEnum()) {
+                JFinalSharedEnum sharedEnum = clazz.getAnnotation(JFinalSharedEnum.class);
+                if (sharedEnum != null) {
+                    String name = AnnotationUtil.get(sharedEnum.value(), clazz.getSimpleName());
+                    if (sharedEnum.override()) {
+                        engine.removeSharedObject(name);
+                    }
+                    engine.addSharedObject(name, SharedEnumObject.create((Class<? extends Enum<?>>) clazz));
+                }
             }
 
-            JFinalSharedMethod sharedMethod = (JFinalSharedMethod) clazz.getAnnotation(JFinalSharedMethod.class);
+            JFinalSharedMethod sharedMethod = clazz.getAnnotation(JFinalSharedMethod.class);
             if (sharedMethod != null) {
                 engine.addSharedMethod(ClassUtil.newInstance(clazz));
             }
 
-            JFinalSharedStaticMethod sharedStaticMethod = (JFinalSharedStaticMethod) clazz.getAnnotation(JFinalSharedStaticMethod.class);
+            JFinalSharedStaticMethod sharedStaticMethod = clazz.getAnnotation(JFinalSharedStaticMethod.class);
             if (sharedStaticMethod != null) {
                 engine.addSharedStaticMethod(clazz);
             }
 
-            JFinalSharedObject sharedObject = (JFinalSharedObject) clazz.getAnnotation(JFinalSharedObject.class);
+            JFinalSharedObject sharedObject = clazz.getAnnotation(JFinalSharedObject.class);
             if (sharedObject != null) {
                 engine.addSharedObject(AnnotationUtil.get(sharedObject.value()), ClassUtil.newInstance(clazz));
             }
+
+
         }
 
         JbootAppListenerManager.me().onEngineConfig(engine);
     }
 
-    private boolean runInFatjar() {
-        return Thread.currentThread().getContextClassLoader().getResource("") == null;
-    }
 
     @Override
     public void configPlugin(Plugins plugins) {
@@ -246,22 +294,46 @@ public class JbootCoreConfig extends JFinalConfig {
 
     @Override
     public void configInterceptor(Interceptors interceptors) {
-
-        interceptors.addGlobalServiceInterceptor(new JbootAopInterceptor());
-
+        // 拦截器的 inject 通过  AopManager.me().setInjectDependency(true); 去配置
         JbootAppListenerManager.me().onInterceptorConfig(interceptors);
-        JbootAppListenerManager.me().onFixedInterceptorConfig(FixedInterceptors.me());
     }
 
     @Override
     public void configHandler(Handlers handlers) {
 
         //先添加用户的handler，再添加jboot自己的handler
-        //用户的handler优先于jboot的handler执行
+        //用户的 handler 优先于 jboot 的 handler 执行
         JbootAppListenerManager.me().onHandlerConfig(new JfinalHandlers(handlers));
 
-        handlers.add(new JbootGatewayHandler());
-        handlers.add(new JbootFilterHandler());
+        if (JbootGatewayManager.me().isConfigOkAndEnable()) {
+            handlers.add(new JbootGatewayHandler());
+        }
+
+        handlers.add(new AttachmentHandler());
+
+        SentinelConfig sentinelConfig = SentinelConfig.get();
+        if (sentinelConfig.isEnable() && sentinelConfig.isReqeustEnable()) {
+            handlers.add(new SentinelHandler());
+        }
+
+        //metrics 处理
+        JbootMetricConfig metricsConfig = Jboot.config(JbootMetricConfig.class);
+        if (metricsConfig.isEnable() && metricsConfig.isConfigOk()) {
+
+            if (StrUtil.isNotBlank(metricsConfig.getAdminServletMapping())) {
+                handlers.add(new MetricServletHandler(metricsConfig.getAdminServletMapping()));
+            }
+
+            if (metricsConfig.isRequestMetricEnable()) {
+                handlers.add(new JbootRequestMetricHandler());
+            }
+        }
+
+        boolean escapeParas = Jboot.config(JbootWebConfig.class).isEscapeParas();
+        if (escapeParas) {
+            handlers.add(new XSSHandler());
+        }
+
         handlers.add(new JbootHandler());
 
         //若用户自己没配置 ActionHandler，默认使用 JbootActionHandler
@@ -276,21 +348,20 @@ public class JbootCoreConfig extends JFinalConfig {
 
         JbootAppListenerManager.me().onStartBefore();
 
-        JsonManager.me().setDefaultDatePattern("yyyy-MM-dd HH:mm:ss");
+        JsonManager.me().setDefaultDatePattern(DateUtil.dateMillisecondPattern);
 
-        /**
-         * 初始化
-         */
+        // 初始化 Jboot 内置组件
         JbootrpcManager.me().init();
         JbootShiroManager.me().init(routeList);
         JbootScheduleManager.me().init();
         JbootSwaggerManager.me().init();
         LimiterManager.me().init();
         JbootSeataManager.me().init();
-        SentinelManager.me().init();
+        JbootSentinelManager.me().init();
         JbootGatewayManager.me().init();
 
         JbootAppListenerManager.me().onStart();
+
 
         //使用场景：需要等所有组件 onStart() 完成之后，再去执行某些工作的时候
         JbootAppListenerManager.me().onStartFinish();

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ public class RPCUtil {
      * @param copyFrom
      * @param copyTo
      */
-    public static void copyFields(Object copyFrom, Object copyTo) {
+    public static void copyDeclaredFields(Object copyFrom, Object copyTo) {
         Field[] fields = copyFrom.getClass().getDeclaredFields();
         for (Field field : fields) {
             try {
@@ -116,7 +116,7 @@ public class RPCUtil {
     }
 
 
-    private static Method getMethod(Class clazz, String methodName, Class type) {
+    private static Method getMethod(Class<?> clazz, String methodName, Class<?> type) {
         try {
             return clazz.getMethod(methodName, getBoxedClass(type));
         } catch (NoSuchMethodException e) {
@@ -125,9 +125,64 @@ public class RPCUtil {
             } catch (NoSuchMethodException ex) {
             }
         }
-
         return null;
     }
+
+
+    public static void copyNotNullFields(Object copyFrom, Object copyTo, boolean override) {
+        if (copyFrom == null || copyTo == null) {
+            return;
+        }
+
+        Method[] fromObjGetters = copyFrom.getClass().getMethods();
+        for (Method getter : fromObjGetters) {
+            String getterMethodName = getter.getName();
+            if (getterMethodName.length() > 3
+                    && getterMethodName.startsWith("get")
+                    && Modifier.isPublic(getter.getModifiers())
+                    && getter.getParameterCount() == 0) {
+                try {
+                    Class<?> returnType = getter.getReturnType();
+                    if (override) {
+                        Object newData = getter.invoke(copyFrom);
+                        if (newData != null) {
+                            Method setter = copyTo.getClass().getMethod("set" + getterMethodName.substring(3), returnType);
+                            setter.invoke(copyTo, newData);
+                        }
+                    } else {
+                        Object oldData = copyTo.getClass().getMethod(getterMethodName).invoke(copyTo);
+                        if (oldData == null) {
+                            Object newData = getter.invoke(copyFrom);
+                            if (newData != null) {
+                                Method setter = copyTo.getClass().getMethod("set" + getterMethodName.substring(3), returnType);
+                                setter.invoke(copyTo, newData);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // doNothing
+                }
+            }
+        }
+    }
+
+
+    public static <T> boolean isDefaultConfigExist(Class<T> clazz, Map<String, T> ret) {
+        try {
+            Field field = clazz.getField("isDefault");
+            field.setAccessible(true);
+            for (Object obj : ret.values()) {
+                Boolean fieldValue = (Boolean) field.get(obj);
+                if (fieldValue != null && fieldValue) {
+                    return true;
+                }
+            }
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            // do nothing
+        }
+        return false;
+    }
+
 
 
     /**
@@ -148,28 +203,26 @@ public class RPCUtil {
                         ? prefix + "." + arrName //"jboot.rpc.dubbo.method.argument"
                         : prefix + "." + entry.getKey() + "." + arrName;//"jboot.rpc.dubbo.method."+entry.getKey()+".argument";
 
-                String configValue = Jboot.configValue(configKey);
-                if (StrUtil.isNotBlank(configValue)) {
-                    List<F> argCfgList = new ArrayList<>();
-                    Set<String> arguments = StrUtil.splitToSetByComma(configValue);
-                    for (String arg : arguments) {
-                        F fillObj = dataSource.get(arg);
-                        if (fillObj != null) {
-                            argCfgList.add(fillObj);
-                        }
+                String configValue = Jboot.configValue(configKey, "default");
+                List<F> argCfgList = new ArrayList<>();
+                Set<String> arguments = StrUtil.splitToSetByComma(configValue);
+                for (String arg : arguments) {
+                    F fillObj = dataSource.get(arg);
+                    if (fillObj != null) {
+                        argCfgList.add(fillObj);
                     }
-                    if (!argCfgList.isEmpty()) {
-                        try {
-                            //setArguments/setMethods/setRegistries
-                            String setterMethodName = arrName.equals("registry")
-                                    ? "setRegistries"
-                                    : "set" + StrUtil.firstCharToUpperCase(arrName) + "s";
+                }
+                if (!argCfgList.isEmpty()) {
+                    try {
+                        //setArguments/setMethods/setRegistries
+                        String setterMethodName = arrName.equals("registry")
+                                ? "setRegistries"
+                                : "set" + StrUtil.firstCharToUpperCase(arrName) + "s";
 
-                            Method method = entry.getValue().getClass().getMethod(setterMethodName, List.class);
-                            method.invoke(entry.getValue(), argCfgList);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                        Method method = entry.getValue().getClass().getMethod(setterMethodName, List.class);
+                        method.invoke(entry.getValue(), argCfgList);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
             }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,9 @@ public class JbootSqlServerDialect extends SqlServerDialect implements JbootDial
 
 
     @Override
-    public String forFindByColumns(List<Join> joins, String table, String loadColumns, List<Column> columns, String orderBy, Object limit) {
+    public String forFindByColumns(String alias, List<Join> joins, String table, String loadColumns, List<Column> columns, String orderBy, Object limit) {
 
-        StringBuilder sqlBuilder = SqlBuilder.forFindByColumns(joins, table, loadColumns, columns, orderBy, ' ');
+        StringBuilder sqlBuilder = SqlBuilder.forFindByColumns(alias, joins, table, loadColumns, columns, orderBy, ' ');
 
         if (limit == null) {
             return sqlBuilder.toString();
@@ -63,13 +63,13 @@ public class JbootSqlServerDialect extends SqlServerDialect implements JbootDial
     }
 
     @Override
-    public String forFindCountByColumns(List<Join> joins, String table, List<Column> columns) {
-        return SqlBuilder.forFindCountByColumns(joins, table, columns, ' ');
+    public String forFindCountByColumns(String alias, List<Join> joins, String table, List<Column> columns) {
+        return SqlBuilder.forFindCountByColumns(alias, joins, table, columns, ' ');
     }
 
     @Override
-    public String forDeleteByColumns(List<Join> joins, String table, List<Column> columns) {
-        return SqlBuilder.forDeleteByColumns(joins, table, columns, ' ');
+    public String forDeleteByColumns(String alias, List<Join> joins, String table, List<Column> columns) {
+        return SqlBuilder.forDeleteByColumns(alias, joins, table, columns, ' ');
     }
 
 
@@ -80,8 +80,8 @@ public class JbootSqlServerDialect extends SqlServerDialect implements JbootDial
 
 
     @Override
-    public String forPaginateFrom(List<Join> joins, String table, List<Column> columns, String orderBy) {
-        return SqlBuilder.forPaginateFrom(joins, table, columns, orderBy, ' ');
+    public String forPaginateFrom(String alias, List<Join> joins, String table, List<Column> columns, String orderBy) {
+        return SqlBuilder.forPaginateFrom(alias, joins, table, columns, orderBy, ' ');
     }
 
 

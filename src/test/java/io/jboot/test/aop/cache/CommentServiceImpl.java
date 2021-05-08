@@ -10,12 +10,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Bean
+@Bean(name = "name333")
 public class CommentServiceImpl implements CommentService {
 
     @Override
     public String getCommentById(String id) {
-        return "id:" + id + "  data:" + UUID.randomUUID();
+        return "CommentServiceImpl --id:" + id + "  data:" + UUID.randomUUID();
     }
 
     @Override

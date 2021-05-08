@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,11 @@
  */
 package io.jboot.support.jwt;
 
+import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
-import io.jboot.utils.StrUtil;
+import com.jfinal.core.Controller;
 import io.jboot.web.controller.JbootController;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
@@ -29,87 +28,68 @@ import java.util.Map;
  * @version V1.0
  * @Title: 用于对Jwt的设置
  */
-public class JwtInterceptor implements FixedInterceptor {
+public class JwtInterceptor implements Interceptor {
 
     public static final String ISUUED_AT = "isuuedAt";
 
     @Override
     public void intercept(Invocation inv) {
-        if (!JwtManager.me().getConfig().isConfigOk()) {
-            inv.invoke();
-            return;
-        }
-
-        HttpServletRequest request = inv.getController().getRequest();
-        String token = request.getHeader(JwtManager.me().getHttpHeaderName());
-
-        if (StrUtil.isBlank(token) && StrUtil.isNotBlank(JwtManager.me().getHttpParameterKey())) {
-            token = request.getParameter(JwtManager.me().getHttpParameterKey());
-        }
-
-        if (StrUtil.isBlank(token)) {
-            processInvoke(inv, null);
-            return;
-        }
-
-        Map map = JwtManager.me().parseJwtToken(token);
-        if (map == null) {
-            processInvoke(inv, null);
-            return;
-        }
-
         try {
-            JwtManager.me().holdJwts(map);
-            processInvoke(inv, map);
+            inv.invoke();
         } finally {
-            JwtManager.me().releaseJwts();
+
+            JbootController jbootController = (JbootController) inv.getController();
+            Map<String, Object> jwtAttrs = jbootController.getJwtAttrs();
+
+            if (jwtAttrs == null) {
+                refreshIfNecessary(jbootController, jbootController.getJwtParas());
+            } else {
+                responseJwt(jbootController, jwtAttrs);
+            }
         }
     }
 
 
-    private void processInvoke(Invocation inv, Map oldData) {
-
-        inv.invoke();
-
-
-        if (!(inv.getController() instanceof JbootController)) {
-            return;
-        }
-
-        JbootController jbootController = (JbootController) inv.getController();
-        Map<String, Object> jwtMap = jbootController.getJwtAttrs();
-
-
-        if (jwtMap == null || jwtMap.isEmpty()) {
-            refreshIfNecessary(inv, oldData);
-            return;
-        }
-
-        String token = JwtManager.me().createJwtToken(jwtMap);
-        HttpServletResponse response = inv.getController().getResponse();
-        response.addHeader(JwtManager.me().getHttpHeaderName(), token);
-    }
-
-
-    private void refreshIfNecessary(Invocation inv, Map oldData) {
-        if (oldData == null) {
+    /**
+     * 对 jwt 内容进行刷新
+     * @param controller
+     * @param oldData
+     */
+    private void refreshIfNecessary(Controller controller, Map oldData) {
+        if (oldData == null || oldData.isEmpty()) {
             return;
         }
 
         // Jwt token 的发布时间
         Long isuuedAtMillis = (Long) oldData.get(ISUUED_AT);
-        if (isuuedAtMillis == null || JwtManager.me().getConfig().getValidityPeriod() <= 0) {
+
+        // 有效期
+        long validityPeriod = JwtManager.getConfig().getValidityPeriod();
+
+        // 永久有效，没必要刷新 Jwt
+        if (isuuedAtMillis == null || validityPeriod <= 0) {
             return;
         }
 
-        Long nowMillis = System.currentTimeMillis();
-        long savedMillis = nowMillis - isuuedAtMillis;
+        // 已经发布的时间
+        long savedMillis = System.currentTimeMillis() - isuuedAtMillis;
 
-        if (savedMillis > JwtManager.me().getConfig().getValidityPeriod() / 2) {
-            String token = JwtManager.me().createJwtToken(oldData);
-            HttpServletResponse response = inv.getController().getResponse();
-            response.addHeader(JwtManager.me().getHttpHeaderName(), token);
+        // 已经发布的时间 大于有效期的一半，重新刷新
+        if (savedMillis > validityPeriod / 2) {
+            responseJwt(controller, oldData);
         }
+    }
 
+
+    /**
+     * 输出 jwt 内容到客户端
+     *
+     * @param controller
+     * @param map
+     */
+    private void responseJwt(Controller controller, Map map) {
+        String token = JwtManager.me().createJwtToken(map);
+        HttpServletResponse response = controller.getResponse();
+        response.addHeader(JwtManager.me().getHttpHeaderName(), token);
     }
 }

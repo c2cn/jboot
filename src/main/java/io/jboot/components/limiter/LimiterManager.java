@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ public class LimiterManager {
     private Map<String, Semaphore> semaphoreCache = new ConcurrentHashMap<>();
     private Map<String, RateLimiter> rateLimiterCache = new ConcurrentHashMap<>();
 
-    private Boolean enable;
+    private LimitConfig limitConfig = Jboot.config(LimitConfig.class);
     private LimitFallbackProcesser fallbackProcesser;
 
     private static LimiterManager me = new LimiterManager();
@@ -154,6 +154,13 @@ public class LimiterManager {
         return semaphore;
     }
 
+    public Set<String> getConfigPackageOrTargets() {
+        return configPackageOrTargets;
+    }
+
+    public void setConfigPackageOrTargets(Set<String> configPackageOrTargets) {
+        this.configPackageOrTargets = configPackageOrTargets;
+    }
 
     private static boolean match(String string, String regex) {
         Pattern pattern = Pattern.compile(regex);
@@ -186,10 +193,7 @@ public class LimiterManager {
     }
 
     public boolean isEnable() {
-        if (enable == null) {
-            enable = Jboot.config(LimitConfig.class).isEnable();
-        }
-        return enable;
+        return limitConfig.isEnable();
     }
 
     public void processFallback(String resource, String fallback, Invocation inv) {

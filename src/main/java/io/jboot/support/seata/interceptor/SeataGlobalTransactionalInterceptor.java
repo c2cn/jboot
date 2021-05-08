@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import com.jfinal.aop.Invocation;
 import io.jboot.support.seata.JbootSeataManager;
 import io.jboot.support.seata.annotation.SeataGlobalLock;
 import io.jboot.support.seata.annotation.SeataGlobalTransactional;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
+import io.seata.core.model.GlobalLockConfig;
+import io.seata.rm.GlobalLockExecutor;
 
 import java.lang.reflect.Method;
 
@@ -31,7 +32,7 @@ import java.lang.reflect.Method;
  * io/seata/spring/annotation/GlobalTransactionalInterceptor.java
  *
  */
-public class SeataGlobalTransactionalInterceptor implements Interceptor, FixedInterceptor {
+public class SeataGlobalTransactionalInterceptor implements Interceptor {
 
     public SeataGlobalTransactionalInterceptor() {
     }
@@ -49,7 +50,7 @@ public class SeataGlobalTransactionalInterceptor implements Interceptor, FixedIn
             if (globalTrxAnno != null) {
                 handleGlobalTransaction(inv, globalTrxAnno);
             } else if (globalLockAnno != null) {
-                handleGlobalLock(inv);
+                handleGlobalLock(inv,globalLockAnno);
             } else {
                 inv.invoke();
             }
@@ -60,17 +61,20 @@ public class SeataGlobalTransactionalInterceptor implements Interceptor, FixedIn
 
     }
 
-    private void handleGlobalLock(final Invocation inv) throws Exception {
-        JbootSeataManager.me().getGlobalLockTemplate().execute(() -> {
-            try {
+    private void handleGlobalLock(final Invocation inv, final SeataGlobalLock globalLockAnno) throws Throwable {
+        JbootSeataManager.me().getGlobalLockTemplate().execute(new GlobalLockExecutor() {
+            @Override
+            public Object execute() throws Throwable {
                 inv.invoke();
                 return inv.getReturnValue();
-            } catch (Throwable e) {
-                if (e instanceof Exception) {
-                    throw (Exception)e;
-                } else {
-                    throw new RuntimeException(e);
-                }
+            }
+
+            @Override
+            public GlobalLockConfig getGlobalLockConfig() {
+                GlobalLockConfig config = new GlobalLockConfig();
+                config.setLockRetryInternal(globalLockAnno.lockRetryInternal());
+                config.setLockRetryTimes(globalLockAnno.lockRetryTimes());
+                return config;
             }
         });
     }

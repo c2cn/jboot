@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,13 @@ public class JbootmqConfig {
     public static final String TYPE_ACTIVEMQ = "activemq";
     public static final String TYPE_ALIYUNMQ = "aliyunmq";
     public static final String TYPE_RABBITMQ = "rabbitmq";
+    public static final String TYPE_ROCKETMQ = "rocketmq";
     public static final String TYPE_QPID = "qpid";
     public static final String TYPE_LOCAL= "local";
 
     private String type;
     private String channel;
-    private String syncRecevieMessageChannel; //可同步接收消息的channel配置
+    private String syncRecevieMessageChannel; //可同步接收消息的 channel 配置
     private String serializer;
 
     public String getChannel() {

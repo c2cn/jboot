@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2016, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ public class WechatUserInterceptor implements Interceptor {
         }
 
 
-        String controllerKey = inv.getControllerKey();
+        String controllerKey = inv.getControllerPath();
         String callbackControllerKey = controllerKey + "/wechatCallback";
 
         if (!JFinal.me().getAllActionKeys().contains(callbackControllerKey)) {

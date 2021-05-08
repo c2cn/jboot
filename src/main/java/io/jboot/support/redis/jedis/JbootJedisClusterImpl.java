@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 package io.jboot.support.redis.jedis;
 
 import com.jfinal.log.Log;
-import io.jboot.utils.StrUtil;
+import io.jboot.exception.JbootException;
 import io.jboot.support.redis.JbootRedisBase;
 import io.jboot.support.redis.JbootRedisConfig;
-import io.jboot.exception.JbootException;
+import io.jboot.support.redis.RedisScanResult;
+import io.jboot.utils.StrUtil;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import redis.clients.jedis.*;
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -787,7 +788,7 @@ public class JbootJedisClusterImpl extends JbootRedisBase {
 //        for (int i = 0; i < keys.length; i++) {
 //            keysStrings[i] = keys[i].toString();
 //        }
-        
+
         List<byte[]> data = jedisCluster.blpop(timeout, keysToBytesArray(keys));
 
         if (data != null && data.size() == 2) {
@@ -1184,6 +1185,7 @@ public class JbootJedisClusterImpl extends JbootRedisBase {
      * @param binaryListener
      * @param channels
      */
+    @Override
     public void subscribe(BinaryJedisPubSub binaryListener, final byte[]... channels) {
         /**
          * https://github.com/xetorthio/jedis/wiki/AdvancedUsage
@@ -1194,7 +1196,7 @@ public class JbootJedisClusterImpl extends JbootRedisBase {
         new Thread("jboot-redisCluster-subscribe-BinaryJedisPubSub") {
             @Override
             public void run() {
-                while (true) {
+                while (!isClose()) {
                     //订阅线程断开连接，需要进行重连
                     try {
                         jedisCluster.subscribe(binaryListener, channels);
@@ -1211,6 +1213,15 @@ public class JbootJedisClusterImpl extends JbootRedisBase {
                 }
             }
         }.start();
+    }
+
+
+    @Override
+    public RedisScanResult<String> scan(String pattern, String cursor, int scanCount) {
+        ScanParams params = new ScanParams();
+        params.match(pattern).count(scanCount);
+        ScanResult<String> scanResult = jedisCluster.scan(cursor, params);
+        return new RedisScanResult<>(scanResult.getStringCursor(), scanResult.getResult());
     }
 
 

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,21 +40,20 @@ import java.util.*;
  */
 public class ArpManager {
 
-    private static ArpManager manager;
+    private static ArpManager instance;
 
 
     private List<ActiveRecordPlugin> activeRecordPlugins = new ArrayList<>();
 
 
     public static ArpManager me() {
-        if (manager == null) {
-            manager = new ArpManager();
+        if (instance == null) {
+            instance = new ArpManager();
         }
-        return manager;
+        return instance;
     }
 
-    public ArpManager() {
-
+    private ArpManager() {
 
         Map<String, DataSourceConfig> allDatasourceConfigs = DataSourceConfigManager.me().getDatasourceConfigs();
 
@@ -246,8 +245,11 @@ public class ArpManager {
             case DataSourceConfig.TYPE_POSTGRESQL:
                 activeRecordPlugin.setDialect(new JbootPostgreSqlDialect());
                 break;
+            case DataSourceConfig.TYPE_CLICKHOUSE:
+                activeRecordPlugin.setDialect(new JbootClickHouseDialect());
+                break;
             default:
-                throw new JbootIllegalConfigException("only support datasource type : mysql、orcale、sqlserver、sqlite、ansisql and postgresql, please check your jboot.properties. ");
+                throw new JbootIllegalConfigException("only support datasource type : mysql、orcale、sqlserver、sqlite、ansisql、postgresql and clickhouse, please check your jboot.properties. ");
         }
     }
 

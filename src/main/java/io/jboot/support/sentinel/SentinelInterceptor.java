@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,24 +15,69 @@
  */
 package io.jboot.support.sentinel;
 
+import com.alibaba.csp.sentinel.Entry;
+import com.alibaba.csp.sentinel.EntryType;
+import com.alibaba.csp.sentinel.SphU;
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
 import com.jfinal.aop.Interceptor;
 import com.jfinal.aop.Invocation;
-import io.jboot.web.fixedinterceptor.FixedInterceptor;
 
 /**
  * @author michael yang (fuhai999@gmail.com)
  * @Date: 2020/1/7
  */
-public class SentinelInterceptor implements Interceptor, FixedInterceptor {
-
+public class SentinelInterceptor extends AbstractSentinelInterceptor implements Interceptor {
 
     @Override
     public void intercept(Invocation inv) {
-        SentinelProcesser processer = SentinelManager.me().getProcesser();
-        if (processer != null){
-            processer.doProcess(inv);
-        }else {
+
+        SentinelResource annotation = inv.getMethod().getAnnotation(SentinelResource.class);
+        if (annotation == null) {
             inv.invoke();
+            return;
+        }
+
+        String resourceName = getResourceName(annotation.value(), inv.getMethod());
+        EntryType entryType = annotation.entryType();
+        int resourceType = annotation.resourceType();
+        Entry entry = null;
+        try {
+            entry = SphU.entry(resourceName, resourceType, entryType, inv.getArgs());
+            inv.invoke();
+        } catch (BlockException ex) {
+            try {
+                inv.setReturnValue(handleBlockException(inv, annotation, ex));
+            } catch (Throwable throwable) {
+                if (inv.isActionInvocation()) {
+                    inv.getController().renderText("Blocked by Sentinel " + ex.getRule());
+                } else {
+                    throwable.printStackTrace();
+                }
+            }
+            return;
+        } catch (Throwable ex) {
+            Class<? extends Throwable>[] exceptionsToIgnore = annotation.exceptionsToIgnore();
+            // The ignore list will be checked first.
+            if (exceptionsToIgnore.length > 0 && exceptionBelongsTo(ex, exceptionsToIgnore)) {
+                throw ex;
+            }
+            if (exceptionBelongsTo(ex, annotation.exceptionsToTrace())) {
+                traceException(ex);
+                try {
+                    inv.setReturnValue(handleFallback(inv, annotation, ex));
+                } catch (Throwable throwable) {
+                    throwable.printStackTrace();
+                }
+                return;
+            }
+
+            // No fallback function can handle the exception, so throw it out.
+            throw ex;
+        } finally {
+            if (entry != null) {
+                entry.exit(1, inv.getArgs());
+            }
         }
     }
 

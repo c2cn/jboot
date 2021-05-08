@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 package io.jboot.db.datasource;
 
 import com.jfinal.plugin.activerecord.DbKit;
+import io.jboot.db.driver.DriverClassNames;
 import io.jboot.utils.StrUtil;
 
 
@@ -28,13 +29,15 @@ public class DataSourceConfig {
     public static final String TYPE_SQLITE = "sqlite";
     public static final String TYPE_ANSISQL = "ansisql";
     public static final String TYPE_POSTGRESQL = "postgresql";
+    public static final String TYPE_CLICKHOUSE = "clickhouse";
+
 
     private String name;
     private String type = TYPE_MYSQL;
     private String url;
     private String user;
     private String password;
-    private String driverClassName = "com.mysql.jdbc.Driver";
+    private String driverClassName;
     private String connectionInitSql;
     private String poolName;
     private boolean cachePrepStmts = true;
@@ -55,7 +58,7 @@ public class DataSourceConfig {
     private long minEvictableIdleTimeMillis = 1000L * 60L * 30L;
     // 配置发生错误时多久重连
     private long timeBetweenConnectErrorMillis = 500;
-    private String validationQuery = "select 1";
+    private String validationQuery;
     private boolean testWhileIdle = true;
     private boolean testOnBorrow = false;
     private boolean testOnReturn = false;
@@ -125,7 +128,10 @@ public class DataSourceConfig {
     }
 
     public String getDriverClassName() {
-        return driverClassName;
+        if (StrUtil.isNotBlank(driverClassName)) {
+            return driverClassName;
+        }
+        return DriverClassNames.getDefaultDriverClass(getType());
     }
 
     public void setDriverClassName(String driverClassName) {
@@ -358,13 +364,20 @@ public class DataSourceConfig {
     }
 
     public String getValidationQuery() {
-        if(this.url.startsWith("jdbc:oracle")){
+        if (validationQuery != null) {
+            return validationQuery;
+        }
+        if (this.url == null) {
+            return null;
+        }
+        String url = this.url.toLowerCase();
+        if (url.startsWith("jdbc:oracle")) {
             return "select 1 from dual";
-        }else if(this.url.startsWith("jdbc:db2")){
+        } else if (url.startsWith("jdbc:db2")) {
             return "select 1 from sysibm.sysdummy1";
-        }else if(this.url.startsWith("jdbc:hsqldb")){
+        } else if (url.startsWith("jdbc:hsqldb")) {
             return "select 1 from INFORMATION_SCHEMA.SYSTEM_USERS";
-        }else if(this.url.startsWith("jdbc:derby")){
+        } else if (url.startsWith("jdbc:derby")) {
             return "select 1 from INFORMATION_SCHEMA.SYSTEM_USERS";
         }
         return "select 1";

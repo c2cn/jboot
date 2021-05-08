@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,13 @@ package io.jboot.db.model;
 
 
 import com.jfinal.ext.kit.DateKit;
+import io.jboot.utils.CollectionUtil;
 import io.jboot.utils.StrUtil;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.regex.Matcher;
 
 class Util {
@@ -165,6 +169,14 @@ class Util {
                 if (obj == null) {
                     throw new NullPointerException("Columns must has not null para value in safeMode.");
                 }
+            }
+        }
+    }
+
+    static void checkNullParas(Columns columns, Collection collection) {
+        if (columns.isUseSafeMode()) {
+            if (CollectionUtil.isEmpty(collection)) {
+                throw new NullPointerException("Columns must has not empty collection in safeMode.");
             }
         }
     }

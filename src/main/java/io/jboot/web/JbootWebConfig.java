@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,10 @@ public class JbootWebConfig {
 
     public static final String DEFAULT_COOKIE_ENCRYPT_KEY = "JBOOT_DEFAULT_ENCRYPT_KEY";
 
-
     private String cookieEncryptKey = DEFAULT_COOKIE_ENCRYPT_KEY;
+    private int cookieMaxAge = 60 * 60 * 24 * 2; // 2 days（单位：秒）
     private String webSocketEndpoint;
-    private boolean camelCaseJsonStyleEnable = true;
-    private boolean camelCaseToLowerCaseAnyway = false;
-    private String jsonTimestampPattern;
+    private boolean escapeParas = false;
 
     public String getCookieEncryptKey() {
         return cookieEncryptKey;
@@ -39,6 +37,14 @@ public class JbootWebConfig {
 
     public void setCookieEncryptKey(String cookieEncryptKey) {
         this.cookieEncryptKey = cookieEncryptKey;
+    }
+
+    public int getCookieMaxAge() {
+        return cookieMaxAge;
+    }
+
+    public void setCookieMaxAge(int cookieMaxAge) {
+        this.cookieMaxAge = cookieMaxAge;
     }
 
     public String getWebSocketEndpoint() {
@@ -49,27 +55,11 @@ public class JbootWebConfig {
         this.webSocketEndpoint = webSocketEndpoint;
     }
 
-    public boolean isCamelCaseJsonStyleEnable() {
-        return camelCaseJsonStyleEnable;
+    public boolean isEscapeParas() {
+        return escapeParas;
     }
 
-    public void setCamelCaseJsonStyleEnable(boolean camelCaseJsonStyleEnable) {
-        this.camelCaseJsonStyleEnable = camelCaseJsonStyleEnable;
-    }
-
-    public boolean isCamelCaseToLowerCaseAnyway() {
-        return camelCaseToLowerCaseAnyway;
-    }
-
-    public void setCamelCaseToLowerCaseAnyway(boolean camelCaseToLowerCaseAnyway) {
-        this.camelCaseToLowerCaseAnyway = camelCaseToLowerCaseAnyway;
-    }
-
-    public String getJsonTimestampPattern() {
-        return jsonTimestampPattern;
-    }
-
-    public void setJsonTimestampPattern(String jsonTimestampPattern) {
-        this.jsonTimestampPattern = jsonTimestampPattern;
+    public void setEscapeParas(boolean escapeParas) {
+        this.escapeParas = escapeParas;
     }
 }

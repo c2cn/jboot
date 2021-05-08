@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,18 @@ public class ClassScanner {
 
     public static final Set<String> scanClasses = new HashSet<>();
     public static final Set<String> excludeClasses = new HashSet<>();
+
+//    public static final Set<String> excludeFolderInjar = new HashSet<>();
+//
+//    static {
+//        excludeFolderInjar.add("webapp");
+//        excludeFolderInjar.add("template");
+//        excludeFolderInjar.add("assets");
+//        excludeFolderInjar.add("META-INF");
+//        excludeFolderInjar.add("schemaorg_apache_xmlbeans");
+//        excludeFolderInjar.add("rest-management-private-classpath");
+//    }
+
 
     public static void addScanJarPrefix(String prefix) {
         scanJars.add(prefix.trim());
@@ -228,6 +240,39 @@ public class ClassScanner {
         excludeJars.add("opentest4j-");
         excludeJars.add("freemarker-");
         excludeJars.add("protobuf-");
+        excludeJars.add("jdom2-");
+        excludeJars.add("useragentutils-");
+        excludeJars.add("common-io-");
+        excludeJars.add("common-image-");
+        excludeJars.add("common-lang-");
+        excludeJars.add("imageio-");
+        excludeJars.add("curvesapi-");
+        excludeJars.add("myexcel-");
+        excludeJars.add("oshi-");
+        excludeJars.add("classmate-");
+        excludeJars.add("hibernate-");
+        excludeJars.add("aspectjweaver-");
+        excludeJars.add("aspectjrt-");
+        excludeJars.add("simpleclient_");
+        excludeJars.add("rocketmq-");
+        excludeJars.add("clickhouse-");
+        excludeJars.add("lz4-");
+        excludeJars.add("commons-digester-");
+        excludeJars.add("opencc4j-");
+        excludeJars.add("heaven-");
+        excludeJars.add("tinypinyin-");
+        excludeJars.add("jieba-");
+        excludeJars.add("ahocorasick-");
+        excludeJars.add("kotlin-");
+        excludeJars.add("xml-apis-");
+        excludeJars.add("dom4j-");
+        excludeJars.add("ini4j-");
+        excludeJars.add("cache-api-");
+        excludeJars.add("byte-buddy-");
+        excludeJars.add("jodd-");
+        excludeJars.add("redisson-");
+        excludeJars.add("org.jacoco");
+
     }
 
 
@@ -236,6 +281,16 @@ public class ClassScanner {
     }
 
     static {
+        excludeClasses.add("java.");
+        excludeClasses.add("javax.");
+        excludeClasses.add("junit.");
+        excludeClasses.add("jline.");
+        excludeClasses.add("redis.");
+        excludeClasses.add("lombok.");
+        excludeClasses.add("oshi.");
+        excludeClasses.add("jodd.");
+        excludeClasses.add("javassist.");
+        excludeClasses.add("google.");
         excludeClasses.add("com.jfinal.");
         excludeClasses.add("org.aopalliance.");
         excludeClasses.add("org.apache.");
@@ -244,7 +299,7 @@ public class ClassScanner {
         excludeClasses.add("org.slf4j.");
         excludeClasses.add("org.antlr.");
         excludeClasses.add("org.jboss.");
-        excludeClasses.add("org.javassist.");
+        excludeClasses.add("org.checkerframework.");
         excludeClasses.add("org.hamcrest.");
         excludeClasses.add("org.jsoup.");
         excludeClasses.add("org.objenesis.");
@@ -253,6 +308,15 @@ public class ClassScanner {
         excludeClasses.add("org.yaml.");
         excludeClasses.add("org.checker");
         excludeClasses.add("org.codehaus");
+        excludeClasses.add("org.jdom2.");
+        excludeClasses.add("org.aspectj.");
+        excludeClasses.add("org.hibernate.");
+        excludeClasses.add("org.ahocorasick.");
+        excludeClasses.add("org.ini4j.");
+        excludeClasses.add("org.jetbrains.");
+        excludeClasses.add("org.jacoco.");
+        excludeClasses.add("org.xnio.");
+        excludeClasses.add("aj.org.");
         excludeClasses.add("ch.qos.");
         excludeClasses.add("com.alibaba.csp.");
         excludeClasses.add("com.alibaba.nacos.");
@@ -266,48 +330,39 @@ public class ClassScanner {
         excludeClasses.add("com.esotericsoftware.");
         excludeClasses.add("com.fasterxml.");
         excludeClasses.add("com.github.");
+        excludeClasses.add("io.github.");
         excludeClasses.add("com.google.");
+        excludeClasses.add("metrics_influxdb.");
         excludeClasses.add("com.rabbitmq.");
         excludeClasses.add("com.squareup.");
+        excludeClasses.add("com.sun.");
         excludeClasses.add("com.typesafe.");
         excludeClasses.add("com.weibo.api.motan.");
         excludeClasses.add("com.zaxxer.");
         excludeClasses.add("com.mysql.");
+        excludeClasses.add("com.papertrail.");
         excludeClasses.add("org.gjt.");
+        excludeClasses.add("org.fusesource.");
+        excludeClasses.add("org.redisson.");
         excludeClasses.add("io.dropwizard");
+        excludeClasses.add("io.prometheus");
         excludeClasses.add("io.jsonwebtoken");
         excludeClasses.add("io.lettuce");
         excludeClasses.add("reactor.adapter");
-        excludeClasses.add("io.prometheus");
         excludeClasses.add("io.seata.");
         excludeClasses.add("io.swagger.");
         excludeClasses.add("io.undertow.");
+        excludeClasses.add("io.netty.");
         excludeClasses.add("it.sauronsoftware");
-        excludeClasses.add("javax.");
-        excludeClasses.add("java.");
-        excludeClasses.add("junit.");
-        excludeClasses.add("jline.");
-        excludeClasses.add("redis.");
-        excludeClasses.add("lombok.");
         excludeClasses.add("net.oschina.j2cache");
+        excludeClasses.add("net.bytebuddy");
         excludeClasses.add("cn.hutool.");
         excludeClasses.add("com.dyuproject.");
         excludeClasses.add("io.protostuff.");
-        excludeClasses.add("io.jboot.core.");
-        excludeClasses.add("io.jboot.web.");
-        excludeClasses.add("io.jboot.objects.");
-        excludeClasses.add("io.jboot.utils.");
-        excludeClasses.add("io.jboot.codegen.");
-        excludeClasses.add("io.jboot.wechat.");
-        excludeClasses.add("io.jboot.components.");
-        excludeClasses.add("io.jboot.support.");
-        excludeClasses.add("io.jboot.exception.");
-        excludeClasses.add("io.jboot.db.");
-        excludeClasses.add("io.jboot.aop.");
-        excludeClasses.add("io.jboot.app.");
-        excludeClasses.add("io.jboot.service.");
-        excludeClasses.add("io.jboot.Jboot");
+        excludeClasses.add("io.reactivex.");
         excludeClasses.add("freemarker.");
+        excludeClasses.add("com.twelvemonkeys.");
+        excludeClasses.add("eu.bitwalker.");
     }
 
 
@@ -367,10 +422,10 @@ public class ClassScanner {
     }
 
 
-    public static <T> List<Class<T>> scanSubClass(Class<T> pclazz, boolean isInstantiable) {
+    public static <T> List<Class<T>> scanSubClass(Class<T> pclazz, boolean instantiable) {
         initIfNecessary();
         List<Class<T>> classes = new ArrayList<>();
-        findChildClasses(classes, pclazz, isInstantiable);
+        findChildClasses(classes, pclazz, instantiable);
         return classes;
     }
 
@@ -402,7 +457,7 @@ public class ClassScanner {
     }
 
 
-    public static List<Class> scanClassByAnnotation(Class annotationClass, boolean isInstantiable) {
+    public static List<Class> scanClassByAnnotation(Class annotationClass, boolean instantiable) {
         initIfNecessary();
 
         List<Class> list = new ArrayList<>();
@@ -412,7 +467,7 @@ public class ClassScanner {
                 continue;
             }
 
-            if (isInstantiable && !isInstantiable(clazz)) {
+            if (instantiable && !isInstantiable(clazz)) {
                 continue;
             }
 
@@ -429,14 +484,14 @@ public class ClassScanner {
     }
 
 
-    private static <T> void findChildClasses(List<Class<T>> classes, Class<T> parent, boolean isInstantiable) {
+    private static <T> void findChildClasses(List<Class<T>> classes, Class<T> parent, boolean instantiable) {
         for (Class clazz : appClassesCache) {
 
             if (!parent.isAssignableFrom(clazz)) {
                 continue;
             }
 
-            if (isInstantiable && !isInstantiable(clazz)) {
+            if (instantiable && !isInstantiable(clazz)) {
                 continue;
             }
 
@@ -445,10 +500,12 @@ public class ClassScanner {
     }
 
 
+
     private static void initAppClasses() {
 
         Set<String> jarPaths = new HashSet<>();
         Set<String> classPaths = new HashSet<>();
+
 
         // jdk8 及以下、
         // tomcat 容器、
@@ -474,7 +531,7 @@ public class ClassScanner {
             }
 
             if (JbootConfigManager.me().isDevMode()) {
-                System.out.println("ClassScanner scan classpath : " + classPath);
+                System.out.println("Jboot Scan ClassPath: " + classPath);
             }
 
             addClassesFromClassPath(classPath);
@@ -494,7 +551,7 @@ public class ClassScanner {
             }
 
             if (JbootConfigManager.me().isDevMode()) {
-                System.out.println("ClassScanner scan jar : " + jarPath);
+                System.out.println("Jboot Scan Jar: " + jarPath);
             }
 
             addClassesFromJar(jarPath);
@@ -510,10 +567,12 @@ public class ClassScanner {
             Enumeration<JarEntry> entries = jarFile.entries();
             while (entries.hasMoreElements()) {
                 JarEntry jarEntry = entries.nextElement();
-                String entryName = jarEntry.getName();
-                if (!jarEntry.isDirectory() && entryName.endsWith(".class")) {
-                    String className = entryName.replace("/", ".").substring(0, entryName.length() - 6);
-                    addClass(classForName(className));
+                if (!jarEntry.isDirectory()) {
+                    String entryName = jarEntry.getName();
+                    if (entryName.endsWith(".class")) {
+                        String className = entryName.replace("/", ".").substring(0, entryName.length() - 6);
+                        addClass(classForName(className));
+                    }
                 }
             }
         } catch (IOException e1) {
@@ -587,7 +646,7 @@ public class ClassScanner {
                     if (!path.toLowerCase().endsWith(".jar")) {
                         classPaths.add(new File(path).getCanonicalPath().replace('\\', '/'));
                     } else {
-                        jarPaths.add(path.replace('\\', '/'));
+                        jarPaths.add(new File(path).getCanonicalPath().replace('\\', '/'));
                     }
                 }
             }
@@ -620,14 +679,13 @@ public class ClassScanner {
             if (path.startsWith("/") && path.indexOf(":") == 2) {
                 path = path.substring(1);
             }
-
-            if (!path.toLowerCase().endsWith(".jar") && !jarPaths.contains(path)) {
-                try {
+            try {
+                if (!path.toLowerCase().endsWith(".jar") && !jarPaths.contains(path)) {
                     classPaths.add(new File(path).getCanonicalPath().replace('\\', '/'));
-                } catch (IOException e) {
+                } else {
+                    jarPaths.add(new File(path).getCanonicalPath().replace('\\', '/'));
                 }
-            } else {
-                jarPaths.add(path.replace('\\', '/'));
+            } catch (IOException e) {
             }
         }
     }

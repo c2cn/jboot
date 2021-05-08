@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 package io.jboot.app.config;
 
 
-import io.jboot.utils.StrUtil;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
@@ -27,61 +26,89 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ConfigUtil {
 
 
-    public static boolean isBlank(String string) {
-        return string == null || string.trim().equals("");
-    }
-
-    public static boolean isNotBlank(String string) {
-        return !isBlank(string);
-    }
-
     public static <T> T newInstance(Class<T> clazz) {
         try {
-            Constructor constructor = clazz.getDeclaredConstructor();
+            Constructor<T> constructor = clazz.getDeclaredConstructor();
             constructor.setAccessible(true);
-            return (T) constructor.newInstance();
+            return constructor.newInstance();
         } catch (Exception e) {
             e.printStackTrace();
         }
         return null;
     }
 
-    public static List<ConfigPart> parseParts(String string) {
-        if (StrUtil.isBlank(string)) {
+    public static List<ConfigPara> parseParas(String string) {
+        if (isBlank(string)) {
             return null;
         }
-        List<ConfigPart> configParts = new LinkedList<>();
-        char[] chars = string.toCharArray();
-        ConfigPart part = null;
+
+        List<ConfigPara> paras = null;
+        ConfigPara para = null;
         int index = 0;
+        boolean hasDefaultValue = false;
+        char[] chars = string.toCharArray();
         for (char c : chars) {
             //第一个字符是 '{' 会出现 ArrayIndexOutOfBoundsException 错误
-            if (c == '{' && index > 0 && chars[index - 1] == '$' && part == null) {
-                part = new ConfigPart();
-                part.setStart(index);
-            } else if (c == '}' && part != null) {
-                part.setEnd(index);
-                configParts.add(part);
-                part = null;
-            } else if (part != null) {
-                part.append(c);
-                if (c == ':' && part.getKeyValueIndexOf() == 0) {
-                    part.setKeyValueIndexOf(index - part.getStart());
+            if (c == '{' && index > 0 && chars[index - 1] == '$' && para == null) {
+                para = new ConfigPara();
+                hasDefaultValue = false;
+                para.setStart(index - 1);
+            } else if (c == '}' && para != null) {
+                para.setEnd(index);
+                if (paras == null){
+                    paras = new LinkedList<>();
+                }
+                paras.add(para);
+                para = null;
+            } else if (para != null) {
+                if (c == ':' && !hasDefaultValue) {
+                    hasDefaultValue = true;
+                } else if (hasDefaultValue) {
+                    para.appendToDefaultValue(c);
+                } else {
+                    para.appendToKey(c);
                 }
             }
             index++;
         }
-        return configParts;
+        return paras;
     }
 
 
-    public static List<Method> getClassSetMethods(Class clazz) {
+    public static String parseValue(String value) {
+        List<ConfigPara> paras = parseParas(value);
+        if (paras == null || paras.size() == 0) {
+            return value;
+        }
+        JbootConfigManager manager = JbootConfigManager.me();
+        StringBuilder retBuilder = new StringBuilder(value.length());
+        int index = 0;
+        for (ConfigPara para : paras) {
+            if (para.getStart() > index) {
+                retBuilder.append(value, index, para.getStart());
+            }
+
+            String configValue = manager.getConfigValue(para.getKey());
+            configValue = isNotBlank(configValue) ? configValue : para.getDefaultValue();
+            retBuilder.append(configValue);
+            index = para.getEnd() + 1;
+        }
+
+        if (index < value.length()) {
+            retBuilder.append(value, index, value.length());
+        }
+
+        return retBuilder.toString();
+    }
+
+
+    public static List<Method> getClassSetMethods(Class<?> clazz) {
         List<Method> setMethods = new ArrayList<>();
         Method[] methods = clazz.getMethods();
         for (Method method : methods) {
             if (method.getName().startsWith("set")
-                    && Character.isUpperCase(method.getName().charAt(3))
                     && method.getName().length() > 3
+                    && Character.isUpperCase(method.getName().charAt(3))
                     && method.getParameterCount() == 1
                     && Modifier.isPublic(method.getModifiers())
                     && !Modifier.isStatic(method.getModifiers())) {
@@ -100,6 +127,59 @@ public class ConfigUtil {
             return new String(arr);
         }
         return str;
+    }
+
+    public static boolean isBlank(String str) {
+        if (str == null) {
+            return true;
+        }
+
+        for (int i = 0, len = str.length(); i < len; i++) {
+            if (str.charAt(i) > ' ') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean isNotBlank(Object str) {
+        return str != null && !isBlank(str.toString());
+    }
+
+    public static boolean areNotBlank(String... strs) {
+        if (strs == null || strs.length == 0) {
+            return false;
+        }
+
+        for (String string : strs) {
+            if (isBlank(string)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static String map2string(Map map) {
+        if (map == null || map.isEmpty()) {
+            return "{ }";
+        }
+
+        StringJoiner joiner = new StringJoiner(", ", "{ ", " }");
+        for (Object key : map.keySet()) {
+            joiner.add(key + "='" + map.get(key) + "'");
+        }
+        return joiner.toString();
+    }
+
+
+    static Properties readExternalProperties() {
+        String currentJarFilePath = ConfigUtil.class.getProtectionDomain().getCodeSource().getLocation().getFile();
+        File fileDir = new File(currentJarFilePath).getParentFile();
+        File externalProperties = new File(fileDir, "jboot.properties");
+        if (externalProperties.exists()) {
+            return new JbootProp(externalProperties).getProperties();
+        }
+        return null;
     }
 
 
@@ -143,7 +223,7 @@ public class ConfigUtil {
 
     public static final Object convert(Class<?> convertClass, String s, Type genericType) {
 
-        if (convertClass == String.class || s == null) {
+        if (convertClass == String.class || s == null || convertClass == Object.class) {
             return s;
         }
 

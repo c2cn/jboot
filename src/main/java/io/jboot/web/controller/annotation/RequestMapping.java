@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,13 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 public @interface RequestMapping {
+
+    /**
+     * 由于空字符串可以被用于配置 viewPath，所以使用如下字符串表示默认值
+     */
+    String NULL_VIEW_PATH = "*";
+
     String value();
 
-    String viewPath() default "";
+    String viewPath() default NULL_VIEW_PATH;
 }

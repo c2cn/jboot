@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,7 +112,7 @@ public abstract class JbootmqBase implements Jbootmq {
         boolean channelResult = notifyListeners(channel, message, channelListeners.get(channel));
 
         if (!globalResult && !channelResult) {
-            LOG.error("application has recevied mq message, bug has no listener to process it. channel:" +
+            LOG.error("Application has recevied mq message, But has no listener to process it. channel:" +
                     channel + "  message:" + message);
         }
     }

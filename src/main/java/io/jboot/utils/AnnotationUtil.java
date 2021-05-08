@@ -1,32 +1,22 @@
 package io.jboot.utils;
 
 
-import io.jboot.app.config.ConfigPart;
 import io.jboot.app.config.ConfigUtil;
-import io.jboot.app.config.JbootConfigManager;
-
-import java.util.List;
 
 public class AnnotationUtil {
 
     public static String get(String value) {
-        if (StrUtil.isBlank(value)) {
-            return null;
-        } else {
-            value = value.trim();
-        }
+        return get(value, StrUtil.EMPTY);
+    }
 
-
-        List<ConfigPart> configParts = ConfigUtil.parseParts(value);
-        if (configParts != null) {
-            for (ConfigPart cp : configParts) {
-                String configValue = JbootConfigManager.me().getConfigValue(cp.getKey());
-                configValue = StrUtil.isNotBlank(configValue) ? configValue : cp.getDefaultValue();
-                value = value.replace(cp.getPartString(), configValue);
+    public static String get(String value, String defaultValue) {
+        if (StrUtil.isNotBlank(value)) {
+            String ret = ConfigUtil.parseValue(value.trim());
+            if (StrUtil.isNotBlank(ret)) {
+                return ret;
             }
         }
-
-        return value;
+        return defaultValue;
     }
 
 

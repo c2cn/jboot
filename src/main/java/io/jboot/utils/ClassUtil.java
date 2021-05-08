@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ClassUtil {
 
-    public static Log log = Log.getLog(ClassUtil.class);
+    private static Log LOG = Log.getLog(ClassUtil.class);
     private static final Map<Class, Object> singletons = new ConcurrentHashMap<>();
 
 
@@ -42,23 +42,55 @@ public class ClassUtil {
      * @return
      */
     public static <T> T singleton(Class<T> clazz) {
-        Object object = singletons.get(clazz);
-        if (object == null) {
-            synchronized (clazz) {
-                object = singletons.get(clazz);
-                if (object == null) {
-                    object = newInstance(clazz);
-                    if (object != null) {
-                        singletons.put(clazz, object);
-                    } else {
-                        Log.getLog(clazz).error("cannot new newInstance!!!!");
-                    }
+        return singleton(clazz, true);
+    }
 
+
+    /**
+     * 获取单利
+     *
+     * @param clazz
+     * @param createByAop
+     * @param <T>
+     * @return
+     */
+    public static <T> T singleton(Class<T> clazz, boolean createByAop) {
+        Object ret = singletons.get(clazz);
+        if (ret == null) {
+            synchronized (clazz) {
+                ret = singletons.get(clazz);
+                if (ret == null) {
+                    ret = newInstance(clazz, createByAop);
+                    if (ret != null) {
+                        singletons.put(clazz, ret);
+                    } else {
+                        LOG.error("cannot new newInstance!!!!");
+                    }
                 }
             }
         }
+        return (T) ret;
+    }
 
-        return (T) object;
+    public static <T> T singleton(Class<T> clazz, boolean createByAop, boolean inject) {
+        Object ret = singletons.get(clazz);
+        if (ret == null) {
+            synchronized (clazz) {
+                ret = singletons.get(clazz);
+                if (ret == null) {
+                    ret = newInstance(clazz, createByAop);
+                    if (ret != null) {
+                        if (inject && !createByAop) {
+                            Aop.inject(ret);
+                        }
+                        singletons.put(clazz, ret);
+                    } else {
+                        LOG.error("cannot new newInstance!!!!");
+                    }
+                }
+            }
+        }
+        return (T) ret;
     }
 
     /**
@@ -103,7 +135,7 @@ public class ClassUtil {
                 constructor.setAccessible(true);
                 return (T) constructor.newInstance();
             } catch (Exception e) {
-                log.error("can not newInstance class:" + clazz + "\n" + e.toString(), e);
+                LOG.error("can not newInstance class:" + clazz + "\n" + e.toString(), e);
             }
 
             return null;
@@ -129,7 +161,7 @@ public class ClassUtil {
             }
             return (T) ret;
         } catch (Exception e) {
-            log.error("can not newInstance class:" + clazz + "\n" + e.toString(), e);
+            LOG.error("can not newInstance class:" + clazz + "\n" + e.toString(), e);
         }
 
         return null;
@@ -158,7 +190,7 @@ public class ClassUtil {
             return (T) method.invoke(null, null);
         } catch (Exception e) {
 
-            log.error("can not invoke method:" + method.getName()
+            LOG.error("can not invoke method:" + method.getName()
                     + " in class : "
                     + clazz + "\n"
                     + e.toString(), e);
@@ -225,7 +257,7 @@ public class ClassUtil {
             Class<T> clazz = (Class<T>) Class.forName(clazzName, false, classLoader);
             return newInstance(clazz, createByAop);
         } catch (Exception e) {
-            log.error("can not newInstance class:" + clazzName + "\n" + e.toString(), e);
+            LOG.error("can not newInstance class:" + clazzName + "\n" + e.toString(), e);
         }
 
         return null;
@@ -270,7 +302,6 @@ public class ClassUtil {
     }
 
 
-
     public static String buildMethodString(Method method) {
 
         StringBuilder sb = new StringBuilder()
@@ -287,8 +318,24 @@ public class ClassUtil {
                 sb.append(",");
             }
         }
-        return sb.append(")").toString();
 
+        return sb.append(")").toString();
+    }
+
+
+    public static boolean hasClass(String className) {
+        try {
+            Class.forName(className, false, getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+
+    public static ClassLoader getClassLoader() {
+        ClassLoader ret = Thread.currentThread().getContextClassLoader();
+        return ret != null ? ret : ClassUtil.class.getClassLoader();
     }
 
 }

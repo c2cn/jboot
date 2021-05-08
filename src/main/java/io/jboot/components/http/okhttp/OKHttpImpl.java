@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package io.jboot.components.http.okhttp;
 
-import com.jfinal.log.Log;
 import io.jboot.components.http.JbootHttp;
 import io.jboot.components.http.JbootHttpRequest;
 import io.jboot.components.http.JbootHttpResponse;
@@ -23,7 +22,6 @@ import okhttp3.*;
 
 import javax.net.ssl.*;
 import java.io.File;
-import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
@@ -34,7 +32,6 @@ import java.util.Map;
  * @version V1.0
  */
 public class OKHttpImpl implements JbootHttp {
-    private static final Log LOG = Log.getLog(OKHttpImpl.class);
 
     public OKHttpImpl() {
 
@@ -67,7 +64,6 @@ public class OKHttpImpl implements JbootHttp {
             }
 
         } catch (Throwable ex) {
-            LOG.error(ex.toString(), ex);
             response.setError(ex);
         }finally {
             response.close();
@@ -122,7 +118,10 @@ public class OKHttpImpl implements JbootHttp {
         Response okHttpResponse = call.execute();
         response.setResponseCode(okHttpResponse.code());
         response.setContentType(okHttpResponse.body().contentType().type());
-        response.copyStream(okHttpResponse.body().byteStream());
+
+        if (request.isReadBody()) {
+            response.copyStream(okHttpResponse.body().byteStream());
+        }
     }
 
 
@@ -138,7 +137,7 @@ public class OKHttpImpl implements JbootHttp {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         if (request.getCertPath() != null && request.getCertPass() != null) {
             KeyStore clientStore = KeyStore.getInstance("PKCS12");
-            clientStore.load(new FileInputStream(request.getCertPath()), request.getCertPass().toCharArray());
+            clientStore.load(request.getCertInputStream(), request.getCertPass().toCharArray());
 
             KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             keyManagerFactory.init(clientStore, request.getCertPass().toCharArray());
@@ -151,7 +150,7 @@ public class OKHttpImpl implements JbootHttp {
             TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
 
 
-            SSLContext sslContext = SSLContext.getInstance("TLSv1");
+            SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(keyManagers, trustManagers, new SecureRandom());
 
             X509TrustManager x509TrustManager = trustAnyTrustManager;
@@ -176,20 +175,19 @@ public class OKHttpImpl implements JbootHttp {
 
 
     private static X509TrustManager trustAnyTrustManager = new X509TrustManager() {
+        @Override
         public void checkClientTrusted(X509Certificate[] chain, String authType) {
         }
 
+        @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType) {
         }
 
+        @Override
         public X509Certificate[] getAcceptedIssuers() {
             return new X509Certificate[0];
         }
     };
 
-    private static HostnameVerifier hnv = new HostnameVerifier() {
-        public boolean verify(String hostname, SSLSession session) {
-            return true;
-        }
-    };
+    private static HostnameVerifier hnv = (hostname, session) -> true;
 }

@@ -1,6 +1,8 @@
 package io.jboot.test.db.simple;
 
 import com.jfinal.kit.Ret;
+import com.jfinal.plugin.activerecord.Db;
+import com.jfinal.plugin.activerecord.Page;
 import com.jfinal.plugin.activerecord.Record;
 import io.jboot.app.JbootApplication;
 import io.jboot.db.JbootDb;
@@ -24,7 +26,7 @@ public class DbController extends SuperDbController {
         JbootApplication.setBootArg("jboot.datasource.password", "123456");
         JbootApplication.setBootArg("jboot.model.unscanPackage", "*");
         JbootApplication.setBootArg("jboot.model.scanPackage", "io.jboot.test.db.model");
-        JbootApplication.setBootArg("undertow.devMode", "false");
+//        JbootApplication.setBootArg("undertow.devMode", "false");
 
         //启动应用程序
         JbootApplication.run(args);
@@ -32,7 +34,10 @@ public class DbController extends SuperDbController {
         Columns columns = Columns.create();
         columns.between("id",1,5);
         List<User> users = new User().findListByColumns(columns);
+
+
         System.out.println(Arrays.toString(users.toArray()));
+        System.out.println(Db.find("select * from user"));
 
     }
 
@@ -94,14 +99,32 @@ public class DbController extends SuperDbController {
         User dao = new User();
 
         Columns columns = Columns.create();
-        columns.in("user.`id`",1,2,3,4);
-        columns.likeAppendPercent("login_name","c");
-
+        columns.in("u.id",1,2,3,4);
+//        columns.likeAppendPercent("login_name","c");
 
 //        List<User> users = dao.leftJoin("article","a","user.id=a.user_id").findListByColumns(columns);
-        List<User> users = dao.leftJoin("article").as("a").on("user.id=a.user_id").findListByColumns(columns);
+        List<User> users = dao.loadColumns("u.id,a.id").alias("u").leftJoin("article").as("a").on("u.id=a.user_id").findListByColumns(columns);
+
+        dao.findAll();
+
         renderJson(users);
     }
+
+
+
+
+    public void find8(){
+        List<Record> users = JbootDb.use().find("user",Columns.create("login_name",true));
+        renderJson(users);
+    }
+
+
+    public void find9(){
+        User dao = new User();
+        Page<User> page = dao.paginateByColumns(getInt("page",1),10,Columns.create());
+        renderJson(page);
+    }
+
 
 
     public void del1(){

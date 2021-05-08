@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ package io.jboot.aop;
 import com.jfinal.aop.AopFactory;
 import com.jfinal.aop.Inject;
 import com.jfinal.core.Controller;
-import com.jfinal.ext.proxy.CglibProxyFactory;
 import com.jfinal.kit.LogKit;
 import com.jfinal.log.Log;
 import com.jfinal.plugin.activerecord.Model;
 import com.jfinal.proxy.Proxy;
 import com.jfinal.proxy.ProxyManager;
-import io.jboot.Jboot;
 import io.jboot.aop.annotation.*;
+import io.jboot.aop.cglib.JbootCglibProxyFactory;
 import io.jboot.app.config.ConfigUtil;
 import io.jboot.app.config.JbootConfigManager;
 import io.jboot.app.config.annotation.ConfigModel;
@@ -34,13 +33,16 @@ import io.jboot.components.mq.JbootmqMessageListener;
 import io.jboot.components.rpc.Jbootrpc;
 import io.jboot.components.rpc.JbootrpcManager;
 import io.jboot.components.rpc.JbootrpcReferenceConfig;
+import io.jboot.components.rpc.ReferenceConfigCache;
 import io.jboot.components.rpc.annotation.RPCInject;
 import io.jboot.db.model.JbootModel;
 import io.jboot.exception.JbootException;
 import io.jboot.service.JbootServiceBase;
 import io.jboot.utils.*;
 import io.jboot.web.controller.JbootController;
+import net.sf.cglib.proxy.Enhancer;
 
+import javax.annotation.PostConstruct;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -54,7 +56,7 @@ public class JbootAopFactory extends AopFactory {
     private static final Log LOG = Log.getLog(JbootAopFactory.class);
 
     //排除默认的映射
-    private final static Class[] DEFAULT_EXCLUDES_MAPPING_CLASSES = new Class[]{
+    private final static Class<?>[] DEFAULT_EXCLUDES_MAPPING_CLASSES = new Class[]{
             JbootEventListener.class
             , JbootmqMessageListener.class
             , Serializable.class
@@ -67,16 +69,25 @@ public class JbootAopFactory extends AopFactory {
         return me;
     }
 
+    private boolean defaultLazyInit = false;
 
-    private Map<String, Object> beansMap = new ConcurrentHashMap<>();
+    public boolean isDefaultLazyInit() {
+        return defaultLazyInit;
+    }
+
+    public void setDefaultLazyInit(boolean defaultLazyInit) {
+        this.defaultLazyInit = defaultLazyInit;
+    }
+
+    private Map<String, Object> beansCache = new ConcurrentHashMap<>();
+    private Map<String, Class<?>> beanNameClassesMapping = new ConcurrentHashMap<>();
 
 
     private JbootAopFactory() {
-        ProxyManager.me().setProxyFactory(new CglibProxyFactory());
+        ProxyManager.me().setProxyFactory(new JbootCglibProxyFactory());
         setInjectSuperClass(true);
         initBeanMapping();
     }
-
 
     @Override
     protected Object createObject(Class<?> targetClass) {
@@ -97,34 +108,62 @@ public class JbootAopFactory extends AopFactory {
     @Override
     protected void doInject(Class<?> targetClass, Object targetObject) throws ReflectiveOperationException {
         targetClass = getUsefulClass(targetClass);
+        doInjectTargetClass(targetClass, targetObject);
+        doInvokePostConstructMethod(targetClass, targetObject);
+    }
+
+
+    /**
+     * 执行  @PostConstruct 注解方法
+     *
+     * @param targetClass
+     * @param targetObject
+     * @throws ReflectiveOperationException
+     */
+    protected void doInvokePostConstructMethod(Class<?> targetClass, Object targetObject) throws ReflectiveOperationException {
+        Method[] methods = targetClass.getDeclaredMethods();
+        for (Method method : methods) {
+            if (method.getParameterCount() == 0 && method.getAnnotation(PostConstruct.class) != null) {
+                method.setAccessible(true);
+                method.invoke(targetObject);
+                break;
+            }
+        }
+
+        Class<?> superClass = targetClass.getSuperclass();
+        if (notSystemClass(superClass)) {
+            doInvokePostConstructMethod(superClass, targetObject);
+        }
+    }
+
+
+    /**
+     * 执行注入操作
+     *
+     * @param targetClass
+     * @param targetObject
+     * @throws ReflectiveOperationException
+     */
+    protected void doInjectTargetClass(Class<?> targetClass, Object targetObject) throws ReflectiveOperationException {
         Field[] fields = targetClass.getDeclaredFields();
 
         if (fields.length != 0) {
-
             for (Field field : fields) {
-
-                Inject inject = field.getAnnotation(Inject.class);
-                if (inject != null) {
-                    Bean bean = field.getAnnotation(Bean.class);
-                    String beanName = bean != null ? AnnotationUtil.get(bean.name()) : null;
-                    if (StrUtil.isNotBlank(beanName)) {
-                        doInjectByName(targetObject, field, inject, beanName);
+                Object fieldValue = null;
+                if (defaultLazyInit) {
+                    fieldValue = createFieldObjectLazy(targetObject, field);
+                } else {
+                    Lazy Lazy = field.getAnnotation(Lazy.class);
+                    if (Lazy != null) {
+                        fieldValue = createFieldObjectLazy(targetObject, field);
                     } else {
-                        doInjectJFinalOrginal(targetObject, field, inject);
+                        fieldValue = createFieldObjectNormal(targetObject, field);
                     }
-                    continue;
                 }
 
-                ConfigValue configValue = field.getAnnotation(ConfigValue.class);
-                if (configValue != null) {
-                    doInjectConfigValue(targetObject, field, configValue);
-                    continue;
-                }
-
-                RPCInject rpcInject = field.getAnnotation(RPCInject.class);
-                if (rpcInject != null) {
-                    doInjectRPC(targetObject, field, rpcInject);
-                    continue;
+                if (fieldValue != null) {
+                    field.setAccessible(true);
+                    field.set(targetObject, fieldValue);
                 }
             }
         }
@@ -132,29 +171,69 @@ public class JbootAopFactory extends AopFactory {
 
         // 是否对超类进行注入
         if (injectSuperClass) {
-            Class<?> c = targetClass.getSuperclass();
-            if (c != JbootController.class
-                    && c != Controller.class
-                    && c != JbootServiceBase.class
-                    && c != Object.class
-                    && c != JbootModel.class
-                    && c != Model.class
-                    && c != null
-            ) {
-                doInject(c, targetObject);
+            Class<?> superClass = targetClass.getSuperclass();
+            if (notSystemClass(superClass)) {
+                doInjectTargetClass(superClass, targetObject);
             }
         }
     }
 
 
-    private void doInjectByName(Object targetObject, Field field, Inject inject, String name) throws ReflectiveOperationException {
-        Object fieldInjectedObject = getBean(name);
-        if (fieldInjectedObject != null) {
-            setFieldValue(field, targetObject, fieldInjectedObject);
-        } else {
-            LOG.warn("can not inject by name [" + name + "] in " + targetObject.getClass() + "." + field.getName() + ", use default.");
-            doInjectJFinalOrginal(targetObject, field, inject);
+    protected Object createFieldObjectLazy(Object targetObject, Field field) {
+        return Enhancer.create(field.getType(), new JbootLazyLoader(targetObject, field));
+    }
+
+
+    protected Object createFieldObjectNormal(Object targetObject, Field field) throws ReflectiveOperationException {
+        Inject inject = field.getAnnotation(Inject.class);
+        if (inject != null) {
+            Bean bean = field.getAnnotation(Bean.class);
+            String beanName = bean != null ? AnnotationUtil.get(bean.name()) : null;
+            if (StrUtil.isNotBlank(beanName)) {
+                return createFieldObjectByBeanName(targetObject, field, beanName);
+            } else {
+                return createFieldObjectByJfinalOriginal(targetObject, field, inject);
+            }
         }
+
+        RPCInject rpcInject = field.getAnnotation(RPCInject.class);
+        if (rpcInject != null) {
+            return createFieldObjectByRPCComponent(targetObject, field, rpcInject);
+        }
+
+        ConfigValue configValue = field.getAnnotation(ConfigValue.class);
+        if (configValue != null) {
+            return createFieldObjectByConfigValue(targetObject, field, configValue);
+        }
+
+        return null;
+    }
+
+
+    protected boolean notSystemClass(Class clazz) {
+        return clazz != JbootController.class
+                && clazz != Controller.class
+                && clazz != JbootServiceBase.class
+                && clazz != Object.class
+                && clazz != JbootModel.class
+                && clazz != Model.class
+                && clazz != null;
+    }
+
+
+    private Object createFieldObjectByBeanName(Object targetObject, Field field, String beanName) throws ReflectiveOperationException {
+        Object fieldInjectedObject = beansCache.get(beanName);
+        if (fieldInjectedObject == null) {
+            Class<?> fieldInjectedClass = beanNameClassesMapping.get(beanName);
+            if (fieldInjectedClass == null || fieldInjectedClass == Void.class) {
+                fieldInjectedClass = field.getType();
+            }
+
+            fieldInjectedObject = doGet(fieldInjectedClass);
+            beansCache.put(beanName, fieldInjectedObject);
+        }
+
+        return fieldInjectedObject;
     }
 
     /**
@@ -165,15 +244,13 @@ public class JbootAopFactory extends AopFactory {
      * @param inject
      * @throws ReflectiveOperationException
      */
-    private void doInjectJFinalOrginal(Object targetObject, Field field, Inject inject) throws ReflectiveOperationException {
+    private Object createFieldObjectByJfinalOriginal(Object targetObject, Field field, Inject inject) throws ReflectiveOperationException {
         Class<?> fieldInjectedClass = inject.value();
         if (fieldInjectedClass == Void.class) {
             fieldInjectedClass = field.getType();
         }
 
-        Object fieldInjectedObject = doGet(fieldInjectedClass);
-
-        setFieldValue(field, targetObject, fieldInjectedObject);
+        return doGet(fieldInjectedClass);
     }
 
     /**
@@ -183,21 +260,18 @@ public class JbootAopFactory extends AopFactory {
      * @param field
      * @param rpcInject
      */
-    private void doInjectRPC(Object targetObject, Field field, RPCInject rpcInject) {
-
+    private Object createFieldObjectByRPCComponent(Object targetObject, Field field, RPCInject rpcInject) {
         try {
-            JbootrpcReferenceConfig serviceConfig = new JbootrpcReferenceConfig(rpcInject);
             Class<?> fieldInjectedClass = field.getType();
-
+            JbootrpcReferenceConfig referenceConfig = ReferenceConfigCache.getReferenceConfig(rpcInject);
             Jbootrpc jbootrpc = JbootrpcManager.me().getJbootrpc();
-
-            Object fieldInjectedObject = jbootrpc.serviceObtain(fieldInjectedClass, serviceConfig);
-
-            setFieldValue(field, targetObject, fieldInjectedObject);
-
+            return jbootrpc.serviceObtain(fieldInjectedClass, referenceConfig);
+        } catch (NullPointerException npe) {
+            LOG.error("Can not inject rpc service for \"" + field.getName() + "\" in " + ClassUtil.getUsefulClass(targetObject.getClass()) + ", because @RPCInject.check ==\"true\" and target is not available. \n" + rpcInject, npe);
         } catch (Exception ex) {
-            LOG.error("can not inject rpc service in " + targetObject.getClass() + " by config " + rpcInject, ex);
+            LOG.error("Can not inject rpc service for \"" + field.getName() + "\" in " + ClassUtil.getUsefulClass(targetObject.getClass()) + " \n" + rpcInject, ex);
         }
+        return null;
     }
 
     /**
@@ -208,22 +282,21 @@ public class JbootAopFactory extends AopFactory {
      * @param configValue
      * @throws IllegalAccessException
      */
-    private void doInjectConfigValue(Object targetObject, Field field, ConfigValue configValue) throws IllegalAccessException {
+    private Object createFieldObjectByConfigValue(Object targetObject, Field field, ConfigValue configValue) throws IllegalAccessException {
         String key = AnnotationUtil.get(configValue.value());
         Class<?> fieldInjectedClass = field.getType();
-        String value = getConfigValue(key, targetObject, field);
+        String value = JbootConfigManager.me().getConfigValue(key);
 
+        Object fieldObject = null;
         if (StrUtil.isNotBlank(value)) {
-            Object fieldInjectedObject = ConfigUtil.convert(fieldInjectedClass, value, field.getGenericType());
-            if (fieldInjectedObject != null) {
-                setFieldValue(field, targetObject, fieldInjectedObject);
-            }
+            fieldObject = ConfigUtil.convert(fieldInjectedClass, value, field.getGenericType());
         }
-    }
 
-
-    private String getConfigValue(String key, Object targetObject, Field field) {
-        return Jboot.configValue(key);
+        if (fieldObject == null) {
+            field.setAccessible(true);
+            fieldObject = field.get(targetObject);
+        }
+        return fieldObject;
     }
 
 
@@ -270,71 +343,80 @@ public class JbootAopFactory extends AopFactory {
      * 初始化 @Bean 注解的映射关系
      */
     private void initBeanMapping() {
-        List<Class> classes = ClassScanner.scanClassByAnnotation(Bean.class, true);
-        for (Class implClass : classes) {
-            Bean bean = (Bean) implClass.getAnnotation(Bean.class);
-            String beanName = AnnotationUtil.get(bean.name());
-            if (StrUtil.isNotBlank(beanName)) {
-                if (beansMap.containsKey(beanName)) {
-                    throw new JbootException("application has contains beanName \"" + beanName + "\" for " + getBean(beanName)
-                            + ", can not add for class " + implClass);
-                }
-                beansMap.put(beanName, get(implClass));
-            }
 
-            Class<?>[] interfaceClasses = implClass.getInterfaces();
-            if (interfaceClasses == null || interfaceClasses.length == 0) {
-                continue;
-            }
+        // 初始化 @Configuration 里的 beans
+        initConfigurationBeansObject();
 
-            Class[] excludes = buildExcludeClasses(implClass);
-            for (Class interfaceClass : interfaceClasses) {
-                if (!inExcludes(interfaceClass, excludes)) {
-                    this.addMapping(interfaceClass, implClass);
-                }
-            }
-        }
+        // 添加映射
+        initBeansMapping();
+    }
 
 
+    /**
+     * 初始化 @Configuration 里的 bean 配置
+     */
+    private void initConfigurationBeansObject() {
         List<Class> configurationClasses = ClassScanner.scanClassByAnnotation(Configuration.class, true);
-        for (Class configurationClass : configurationClasses) {
-            Object configurationObj = ClassUtil.newInstance(configurationClass);
+        for (Class<?> configurationClass : configurationClasses) {
+            Object configurationObj = ClassUtil.newInstance(configurationClass, false);
             if (configurationObj == null) {
                 throw new NullPointerException("can not newInstance for class : " + configurationClass);
             }
             Method[] methods = configurationClass.getDeclaredMethods();
             for (Method method : methods) {
-                Bean bean = method.getAnnotation(Bean.class);
-                if (bean != null) {
-                    String beanName = StrUtil.obtainDefaultIfBlank(AnnotationUtil.get(bean.name()), method.getName());
-                    if (beansMap.containsKey(beanName)) {
+                Bean beanAnnotation = method.getAnnotation(Bean.class);
+                if (beanAnnotation != null) {
+                    Class<?> returnType = method.getReturnType();
+                    if (returnType == void.class) {
+                        throw new JbootException("@Bean annotation can not use for void method: " + ClassUtil.buildMethodString(method));
+                    }
+
+                    String beanName = StrUtil.obtainDefault(AnnotationUtil.get(beanAnnotation.name()), method.getName());
+                    if (beansCache.containsKey(beanName)) {
                         throw new JbootException("application has contains beanName \"" + beanName + "\" for " + getBean(beanName)
-                                + ", can not add again by method:" + ClassUtil.buildMethodString(method));
+                                + ", can not add again by method: " + ClassUtil.buildMethodString(method));
                     }
 
-                    Object methodObj = null;
                     try {
-                        methodObj = method.invoke(configurationObj);
+                        Object methodObj = method.invoke(configurationObj);
                         if (methodObj != null) {
-                            inject(methodObj);
-                            beansMap.put(beanName, methodObj);
+                            beansCache.put(beanName, methodObj);
+                            singletonCache.put(returnType, methodObj);
                         }
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
                     }
+                }
+            }
+        }
+    }
 
-                    if (methodObj != null) {
-                        Class implClass = ClassUtil.getUsefulClass(methodObj.getClass());
-                        Class<?>[] interfaceClasses = implClass.getInterfaces();
-                        if (interfaceClasses == null || interfaceClasses.length == 0) {
-                            continue;
-                        }
 
-                        Class[] excludes = buildExcludeClasses(implClass);
-                        for (Class interfaceClass : interfaceClasses) {
-                            if (!inExcludes(interfaceClass, excludes) && !mapping.containsKey(interfaceClass)) {
-                                this.addMapping(interfaceClass, implClass);
-                            }
+    /**
+     * 添加 所有的 Bean 和实现类 的映射
+     */
+    private void initBeansMapping() {
+        List<Class> classes = ClassScanner.scanClassByAnnotation(Bean.class, true);
+        for (Class implClass : classes) {
+            Bean bean = (Bean) implClass.getAnnotation(Bean.class);
+            String beanName = AnnotationUtil.get(bean.name());
+            if (StrUtil.isNotBlank(beanName)) {
+                if (beanNameClassesMapping.containsKey(beanName)) {
+                    throw new JbootException("application has contains beanName \"" + beanName + "\" for " + getBean(beanName)
+                            + ", can not add for class " + implClass);
+                }
+                beanNameClassesMapping.put(beanName, implClass);
+            } else {
+                Class<?>[] interfaceClasses = implClass.getInterfaces();
+
+                if (interfaceClasses.length == 0) {
+                    //add self
+                    this.addMapping(implClass, implClass);
+                } else {
+                    Class<?>[] excludes = buildExcludeClasses(implClass);
+                    for (Class<?> interfaceClass : interfaceClasses) {
+                        if (!inExcludes(interfaceClass, excludes)) {
+                            this.addMapping(interfaceClass, implClass);
                         }
                     }
                 }
@@ -343,8 +425,8 @@ public class JbootAopFactory extends AopFactory {
     }
 
 
-    private Class[] buildExcludeClasses(Class implClass) {
-        BeanExclude beanExclude = (BeanExclude) implClass.getAnnotation(BeanExclude.class);
+    private Class<?>[] buildExcludeClasses(Class<?> implClass) {
+        BeanExclude beanExclude = implClass.getAnnotation(BeanExclude.class);
 
         //对某些系统的类 进行排除，例如：Serializable 等
         return beanExclude == null
@@ -364,10 +446,23 @@ public class JbootAopFactory extends AopFactory {
 
 
     public <T> T getBean(String name) {
-        return (T) beansMap.get(name);
+        T ret = (T) beansCache.get(name);
+        if (ret == null) {
+            if (beanNameClassesMapping.containsKey(name)) {
+                try {
+                    ret = (T) doGet(beanNameClassesMapping.get(name));
+                    beansCache.put(name, ret);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        return ret;
     }
 
     public void setBean(String name, Object obj) {
-        beansMap.put(name, obj);
+        beansCache.put(name, obj);
     }
+
 }

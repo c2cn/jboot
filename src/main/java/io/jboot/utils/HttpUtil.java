@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2015-2020, Michael Yang 杨福海 (fuhai999@gmail.com).
+ * Copyright (c) 2015-2021, Michael Yang 杨福海 (fuhai999@gmail.com).
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,6 +223,7 @@ public class HttpUtil {
     public static JbootHttpResponse handle(JbootHttpRequest request) {
         return JbootHttpManager.me().getJbootHttp().handle(request);
     }
+
 
 
 }
